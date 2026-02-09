@@ -12,3 +12,9 @@ __pycache__/
 # Temp / runtime
 *.pid
 *.log
+
+.venv/
+logs/
+__pycache__/
+*.pyc
+kalyx.egg-info/
