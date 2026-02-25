@@ -1,123 +1,217 @@
-# KALYX — Verifiable Execution History System
+KALYX — Verifiable Execution Integrity Platform
 
-## Project Overview
-KALYX is a tamper-evident execution history system that records execution events as an append-only cryptographic ledger.  
-Its purpose is not monitoring “for performance”, but ensuring that system execution history remains *verifiably trustworthy* for audit, compliance, and incident investigations.
+Overview
 
----
+KALYX is a tamper-evident execution integrity platform designed to transform system execution history into cryptographically verifiable evidence.
 
-## Current Status (Checkpoint)
-**Phase 0:** ✅ Completed  
-**Phase 1:** ✅ Completed  
-**Phase 2:** ✅ Completed  
-**Phase 3 (Foundation):** ✅ Completed  
-**Next:** Phase 3 (Application Layer) → Phase 4 (Real ingestion) → Phase 5 (UI + workflows)
+Traditional logs assume trust.
+KALYX makes trust testable.
 
----
+Instead of preventing modification, the system guarantees that any unauthorised change to execution history is detectable and localisable.
 
-## What Problem KALYX Solves
-Traditional logs are easy to modify after compromise (edit/delete/inject).  
-KALYX turns execution history into cryptographic evidence:
-- If an attacker changes history, verification fails at the earliest break point.
-- Trust boundaries are explicit and testable.
+The platform is designed for:
+	•	Audit and compliance verification
+	•	Incident response and forensic validation
+	•	Trust assessment of system activity records
 
----
 
-## Architecture (High Level)
+Problem Statement
 
-### Data Flow
-1. **Event Source**
-   - (Current) File-based exec-like input
-   - (Later) Real exec stream (execsnoop/eBPF/auditd)
-2. **Ingestion Layer**
-   - Parses events and wraps into a standard record format
-3. **Ledger Core**
-   - Append-only hash-chained records (prev_hash → hash)
-4. **Verification**
-   - Recomputes hashes, detects tampering, pinpoints trust collapse
-5. **Interface Layer**
-   - (Current) CLI commands
-   - (Next) API + UI software application
+System logs can be modified, deleted, or injected after compromise.
+Administrators or attackers with elevated privileges can rewrite history.
 
----
+This creates a gap between:
 
-## Ledger Record Model (Current)
-Each record contains:
-- `event`: execution details (comm, pid, ppid, argv, ret, ts if available)
-- `prev_hash`: link to previous record
-- `hash`: integrity proof
+What happened
+vs
+What can be proven
 
-(Optionally: schema/provenance envelope — depending on your current branch)
+KALYX addresses this gap by converting execution events into an append-only cryptographic ledger with deterministic verification.
 
----
 
-## Completed Phases
+Core Architecture
 
-### Phase 0 — Ledger Core
-**Goal:** Implement append-only cryptographic ledger with hash chaining.  
-**Output:** `chain_event()` writes deterministic records to `logs/exec_chain.jsonl`.
+Data Flow
+	1.	Event Source
+	•	(Current) File-based execution input
+	•	(Future) Kernel-level capture (eBPF / auditd)
+	2.	Ingestion Layer
+	•	Normalises execution records
+	•	Wraps into structured ledger format
+	3.	Ledger Core
+	•	Append-only hash-linked records
+	•	Deterministic canonical hashing
+	4.	Verification Engine
+	•	Recomputes hash chain
+	•	Detects earliest integrity violation
+	5.	Interface Layer
+	•	CLI (current)
+	•	Backend API + UI (planned)
 
-### Phase 1 — Verification + Tamper Detection
-**Goal:** Verify ledger integrity and detect modifications.  
-**Output:** `verify_chain()` flags earliest break point; clean ledger verifies successfully.
 
-### Phase 2 — Ingestion (Controlled)
-**Goal:** Ingest external execution-like events into the ledger without breaking integrity.  
-**Output:** `ingest_execsnoop.py` reads execution lines → normalises → chains into ledger.
+Ledger Model
 
-### Phase 3 — Tool Packaging + CLI (Foundation)
-**Goal:** Convert prototype scripts into a usable tool with a stable interface.  
-**Output:** `kalyx` CLI supports:
-- `kalyx ingest`
-- `kalyx verify`
+Each ledger entry contains:
+	•	Execution event metadata
+	•	command name
+	•	pid / ppid
+	•	arguments
+	•	return code
+	•	timestamp (when available)
+	•	prev_hash
+	•	hash
 
----
+Hash Contract:
 
-## Evidence (Screenshots to Insert)
-- [ ] Verification success output (`[✓] Ledger verified — no tampering detected`)
-- [ ] Example ledger line showing fields
-- [ ] Tamper test showing failure at entry X
-- [ ] CLI commands working end-to-end
-- [ ] Git commit history (phases)
+hash = SHA-256(canonical JSON of record excluding "hash")
 
----
+This ensures deterministic reproducibility across environments.
 
-## Known Issues Encountered (and How They Were Resolved)
-- Hash-domain mismatch between writer and verifier → unified canonical hash contract
-- Missing/empty input prevented ledger creation → controlled sample input introduced
-- CLI not found due to PATH/directory collisions → corrected launcher installation
-- Python package import failures → venv + package structure fixed
-- PEP 668 blocked system pip installs → virtual environment adopted
 
----
+Completed Phases
 
-## Roadmap to a Software Application (BSc Requirement)
+Phase 0 — Cryptographic Ledger Core
+	•	Implemented append-only JSONL ledger
+	•	Hash chaining using prev_hash → hash
+	•	Deterministic canonical hashing
 
-### Milestone A — Backend API (4–6 weeks)
-- Provide REST API for:
-  - ingesting events
-  - verifying ledger
-  - status/summary endpoints
-  - exporting reports (JSON/CSV)
+Outcome:
+Execution history becomes tamper-evident.
 
-### Milestone B — Frontend UI (3–5 weeks)
-- UI pages:
-  - Dashboard (ledger health, last verified, entry counts)
-  - Verify page (run verification + show trust break point)
-  - Evidence view (search/filter events)
-  - Export report (download evidence bundle)
 
-### Milestone C — Real Event Collection (Optional/Extension)
-- Replace file ingestion with:
-  - auditd OR execsnoop OR eBPF stream
-- Keep the ledger contract unchanged.
+Phase 1 — Integrity Verification
+	•	Built sequential verifier
+	•	Detects modification, deletion, insertion
+	•	Reports earliest trust collapse
 
----
+Outcome:
+Ledger integrity is testable and defensible.
 
-## Deliverables for Final Submission
-- Source code repo + tags by phase
-- Report (phases, evaluation, limitations)
-- Demo walkthrough (CLI + UI)
-- Evidence bundle: screenshots, sample ledgers, tamper tests
 
----
+Phase 2 — Controlled Ingestion Pipeline
+	•	Built ingestion parser
+	•	Converts execution-like data into ledger records
+	•	Preserved integrity guarantees during ingestion
+
+Issues resolved:
+	•	Hash-domain mismatch between writer and verifier
+	•	Empty ingestion producing false failures
+	•	Deterministic canonical contract enforced
+
+Outcome:
+Full pipeline operational:
+
+input → parse → chain → verify
+
+
+Phase 3 — Tool Packaging & CLI Integration
+	•	Converted prototype scripts into structured package
+	•	Implemented CLI:
+
+kalyx ingest
+kalyx verify
+kalyx status
+
+
+	•	Resolved packaging issues:
+	•	PATH collisions
+	•	launcher directory conflicts
+	•	Python import failures
+	•	PEP 668 restrictions
+	•	package reconstruction
+
+Outcome:
+KALYX is now a reproducible, version-controlled tool.
+
+
+Security Properties
+
+KALYX guarantees:
+	•	Integrity of stored sequence
+	•	Order preservation
+	•	Detection of modification and naive insertion
+	•	Localisation of integrity failure
+
+KALYX does NOT attempt to:
+	•	Prevent kernel-level compromise
+	•	Guarantee authenticity of ingestion source
+	•	Stop root-level attackers
+
+It guarantees that tampering cannot occur silently.
+
+
+Independent Anchoring (Planned)
+
+To protect against full-system compromise and ledger recomputation attacks, KALYX will introduce independent external anchoring.
+
+Planned mechanism:
+	•	Periodic extraction of the current ledger root hash
+	•	Transmission to an external anchor service
+	•	Time-stamping and cryptographic signing of the root
+	•	Append-only storage of signed anchor records
+
+This ensures that a rewritten ledger cannot retroactively match previously anchored roots.
+
+The anchor service will be implemented on an independent device or environment to maintain adversarial separation.
+
+
+Roadmap
+
+Stage 1 — Backend API
+	•	REST endpoints:
+	•	ingest
+	•	verify
+	•	status
+	•	export
+	•	Structured evidence responses
+
+Stage 2 — Frontend Application
+	•	Dashboard: ledger health
+	•	Verification view
+	•	Event explorer
+	•	Evidence export bundle
+
+Stage 3 — Real Event Collection
+	•	Integrate kernel-level execution capture
+	•	Maintain unchanged ledger contract
+
+
+Academic Scope
+
+This project integrates:
+	•	Operating systems concepts
+	•	Cryptographic integrity mechanisms
+	•	Secure logging theory
+	•	Software engineering practices
+	•	Reproducible development workflows
+
+The final deliverable will include:
+	•	Full source code
+	•	Evaluation results
+	•	Controlled tamper simulations
+	•	Documented limitations
+
+
+Current Status
+	•	Ledger Core: Complete
+	•	Verification: Complete
+	•	Ingestion Pipeline: Complete
+	•	CLI Tooling: Complete
+	•	Independent Anchoring: Planned
+	•	API + UI: Planned
+
+
+Repository Structure
+
+kalyx/
+├── kalyx/
+│   ├── cli.py
+│   ├── core/
+│   │   ├── chain.py
+│   │   └── verify.py
+│   └── engine/
+│       └── ingest_execsnoop.py
+├── logs/
+├── reports/
+└── setup.py
+
