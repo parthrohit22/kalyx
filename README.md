@@ -36,7 +36,8 @@ Each execution event is written as a hash-linked record.
   "event": { ... },
   "prev_hash": "...",
   "hash": "..."
-}
+} 
+```
 
 How it works:
 	•	Each record includes the previous record’s hash (prev_hash)
