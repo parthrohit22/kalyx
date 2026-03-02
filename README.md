@@ -1,15 +1,12 @@
 # KALYX
-
-## Verifiable Execution Integrity Platform  
-### Make execution history provable.
-
+## Verifiable Execution Integrity Platform
+### Make execution history *verifiable*.
 
 ## Overview
+KALYX converts execution activity into a **tamper-evident**, **cryptographically verifiable** ledger.
 
-KALYX converts system execution activity into a tamper-evident, cryptographically verifiable ledger.
-
-Traditional logging assumes trust.  
-KALYX makes trust testable.
+Traditional logging assumes stored history remains trustworthy.  
+KALYX makes that trust **testable**.
 
 Instead of asking:
 
@@ -19,25 +16,20 @@ KALYX asks:
 
 > “Can this history still be trusted?”
 
-
 ## The Problem
-
 System logs can be:
-
 - Edited after compromise  
 - Selectively deleted  
 - Injected with fabricated events  
 - Rewritten by privileged users  
 
-Traditional systems provide visibility.  
-They do not provide integrity guarantees.
+Most logging stacks prioritise visibility, storage, and search.  
+They do not *by default* provide a deterministic way to **prove** whether history was modified after capture.
 
-KALYX transforms execution history into cryptographic evidence.
-
+KALYX treats execution history as evidence: if it changes, the change becomes detectable.
 
 ## Core Integrity Model
-
-Each execution event becomes a hash-linked record.
+Each execution event is written as a hash-linked record.
 
 ```json
 {
@@ -45,52 +37,44 @@ Each execution event becomes a hash-linked record.
   "prev_hash": "...",
   "hash": "..."
 }
-```
 
-Every record depends on the previous record’s hash.
+How it works:
+	•	Each record includes the previous record’s hash (prev_hash)
+	•	A new hash is computed over a canonical representation of the record
+	•	Verification recomputes hashes from the beginning and checks link consistency
 
-This guarantees:
+What this provides (within the defined trust boundary):
+	•	Detects post-capture modification of records
+	•	Detects deletion/reordering (chain break)
+	•	Detects naive insertion (prev_hash mismatch)
+	•	Identifies the earliest point where integrity no longer holds (“trust collapse”)
 
-- Append-only history  
-- Deterministic verification  
-- Order preservation  
-- Tamper detection  
-- Trust-collapse localisation  
+If any record is changed without correctly recomputing the chain, verification fails.
 
-If any record is modified, verification fails at the earliest corrupted entry.
+Architecture
 
-
-## Architecture
-
-```
 Event Source
-      ↓
+   ↓
 Ingestion Layer
-      ↓
-Hash-Chained Ledger
-      ↓
+   ↓
+Hash-Chained Ledger (JSONL)
+   ↓
 Verification Engine
-      ↓
-CLI / API / UI
-```
+   ↓
+CLI (current) → API/UI (planned)
 
-Current ingestion: controlled execution input  
-Planned ingestion: eBPF / auditd / real-time streams  
+Current ingestion: controlled execution input (repeatable testing)
+Planned ingestion options: auditd / eBPF / real-time streams
+The ledger contract is designed to remain stable across ingestion sources.
 
-The ledger contract remains stable across all ingestion methods.
+CLI Usage
 
-
-## CLI Usage
-
-```bash
 kalyx ingest
 kalyx verify
 kalyx status
-```
 
 Example:
 
-```bash
 $ kalyx ingest
 [+] Ingested 3 events
 [+] Ledger updated
@@ -102,85 +86,79 @@ $ kalyx status
 Ledger file : logs/exec_chain.jsonl
 Entries     : 3
 Last hash   : 1a9af64...
-```
 
+Implemented Phases (Current)
 
-## Completed Phases
+Phase	Description	Status
+0	Hash-chained ledger core	✅
+1	Deterministic verification + tamper detection	✅
+2	Controlled ingestion pipeline	✅
+3	CLI packaging + reproducible tool	✅
+4	Status command + improved ingestion feedback	✅
 
-| Phase | Description | Status |
-|-------|------------|--------|
-| Phase 0 | Hash-chained cryptographic ledger | ✅ |
-| Phase 1 | Deterministic verification engine | ✅ |
-| Phase 2 | Controlled ingestion pipeline | ✅ |
-| Phase 3 | CLI packaging + reproducible tool | ✅ |
-| Phase 4 | Operational status + improved feedback | ✅ |
+Security Boundary (Important)
 
+KALYX does provide:
+	•	Integrity verification of stored execution history
+	•	Detection of modification, deletion, reordering, naive insertion
+	•	Deterministic verification that localises trust collapse
 
-## Security Boundary
+KALYX does not provide (by itself):
+	•	Protection against full root compromise
+	•	Authenticity guarantees if the ingestion source is malicious
+	•	Prevention of system takeover
 
-KALYX guarantees:
+Key distinction:
+	•	Integrity = “Was the recorded history modified after capture?”
+	•	Authenticity = “Did the event truly occur?”
+KALYX focuses on integrity; authenticity depends on the trustworthiness of event collection.
 
-- Integrity of stored execution history  
-- Detection of modification  
-- Detection of deletion  
-- Detection of naive insertion  
-- Strict chronological linkage  
+Independent Anchoring (Planned)
 
-KALYX does **not** guarantee:
+To reduce the risk of a privileged attacker rewriting the entire ledger and recomputing hashes, KALYX plans an independent anchor:
+	•	Periodic export of the latest ledger hash
+	•	Time-stamped + signed anchor record
+	•	Stored on an independent node (e.g., Raspberry Pi)
 
-- Protection against full root compromise  
-- Authenticity of malicious but valid events  
-- Prevention of system takeover  
+This creates an external “witness” so retrospective rewriting becomes detectable.
 
-Integrity is enforced.  
-Authenticity depends on ingestion trust.
+Roadmap (Planned Work)
 
+Backend API
+	•	POST /ingest
+	•	POST /verify
+	•	GET /status
+	•	GET /export
 
-## Independent Anchor (Planned)
+Web Application
+	•	Ledger health dashboard
+	•	Verification view (show trust collapse point)
+	•	Event explorer (filter/search)
+	•	Evidence export bundle
 
-To prevent retrospective ledger rewriting:
+Real-Time Capture (Optional Extension)
+	•	Integrate auditd/eBPF as an ingestion source
+	•	Preserve the same ledger contract
 
-- Periodic root-hash export  
-- Time-stamped anchor storage  
-- Cryptographic signing  
-- Independent Raspberry Pi node  
-
-This introduces external trust anchoring beyond the primary system.
-
-
-## Roadmap
-
-**Backend API**
-- POST /ingest  
-- POST /verify  
-- GET /status  
-- GET /export  
-
-**Web Application**
-- Ledger health dashboard  
-- Verification interface  
-- Event explorer  
-- Evidence export bundle  
-
-**Real-Time Capture**
-- eBPF or auditd integration  
-- Stable ledger contract preserved  
-
-
-## Academic Contribution
+Academic Contribution
 
 KALYX demonstrates:
+	•	Applied cryptographic integrity design for execution provenance
+	•	Deterministic hash-domain enforcement
+	•	Controlled ingestion boundaries
+	•	Attack simulation validation
+	•	Reproducible software packaging
+	•	Explicit security boundary modelling
 
-- Applied cryptographic integrity design  
-- Deterministic hash-domain enforcement  
-- Controlled ingestion boundaries  
-- Attack simulation validation  
-- Reproducible software packaging  
-- Explicit security boundary modelling  
+Vision
 
+KALYX is not “monitoring for alerts”.
+It is a trust validation layer for execution history.
 
-## Vision
+---
 
-KALYX is not a logging tool.
-
-It is a trust validation system.
+### What changed (so you can justify it if asked)
+- Replaced “**guarantees append-only history**” with “**detects modification/deletion/reordering** within boundary” (more defensible).
+- Made “**integrity vs authenticity**” explicit (reviewers love that).
+- Marked anchor/API/UI as **planned**, not implied as done.
+- Softened “not a logging tool” into “not monitoring for alerts” (less arguable, still keeps your USP).
