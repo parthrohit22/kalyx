@@ -8,6 +8,7 @@ from kalyx.core.verify import verify_chain
 
 def status():
     log_file = "logs/exec_chain.jsonl"
+    status_file = "logs/.kalyx_status.json"
 
     print("KALYX Ledger Status")
     print("--------------------")
@@ -16,7 +17,8 @@ def status():
     if not os.path.exists(log_file):
         print("Entries          : 0")
         print("Last hash        : N/A")
-        print("Status           : Ledger not created")
+        print("Last verified    : NO_LEDGER")
+        print("Timestamp        : N/A")
         return
 
     with open(log_file, "r", encoding="utf-8") as f:
@@ -32,8 +34,19 @@ def status():
     else:
         print("Last hash        : N/A")
 
-    print("Status           : Run `kalyx verify` to validate integrity")
+    if os.path.exists(status_file):
+        with open(status_file, "r", encoding="utf-8") as f:
+            data = json.load(f)
 
+        print(f"Last verified    : {data.get('last_verified', 'N/A')}")
+        print(f"Timestamp        : {data.get('timestamp', 'N/A')}")
+
+        failure_index = data.get("failure_index")
+        if failure_index is not None:
+            print(f"Failure at entry : {failure_index}")
+    else:
+        print("Last verified    : Not yet verified")
+        print("Timestamp        : N/A")
 
 def inspect():
     log_file = "logs/exec_chain.jsonl"
