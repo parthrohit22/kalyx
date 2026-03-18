@@ -6,7 +6,7 @@
 
 ## Overview
 
-KALYX converts system execution activity into a tamper-evident, cryptographically verifiable ledger.
+KALYX converts system execution activity into a tamper-evident, cryptographically verifiable ledger, and performs behavioral analysis on execution patterns.
 
 Traditional logging assumes trust.  
 KALYX makes trust testable.
@@ -17,7 +17,7 @@ Instead of asking:
 
 KALYX asks:
 
-> “Can this history still be trusted?”
+> “Can this history still be trusted — and does it show suspicious behavior?”
 
 
 ## The Problem
@@ -65,44 +65,67 @@ If any record is modified, verification fails at the earliest corrupted entry.
 ```
 Event Source
       ↓
-Ingestion Layer
+Ingestion Layer (eBPF / controlled input)
+      ↓
+Enrichment Layer (user, session, context)
+      ↓
+Normalization Layer (action, target extraction)
       ↓
 Hash-Chained Ledger
       ↓
 Verification Engine
       ↓
+Behavioral Detection Engine
+      ↓
 CLI / API / UI
 ```
-
-Current ingestion: controlled execution input  
-Planned ingestion: eBPF / auditd / real-time streams  
-
-The ledger contract remains stable across all ingestion methods.
 
 
 ## CLI Usage
 
 ```bash
 kalyx ingest
+kalyx ingest-live
 kalyx verify
 kalyx status
+kalyx inspect
+kalyx detect
 ```
 
 Example:
 
 ```bash
-$ kalyx ingest
-[+] Ingested 3 events
-[+] Ledger updated
+$ kalyx ingest-live
+[INFO] Starting live eBPF ingestion...
 
-$ kalyx verify
-[✓] Ledger verified — no tampering detected
+$ kalyx inspect
+# shows enriched + normalized events
 
-$ kalyx status
-Ledger file : logs/exec_chain.jsonl
-Entries     : 3
-Last hash   : 1a9af64...
+$ kalyx detect
+[!] Suspicious activity detected
+type    : DELETE_CREATE
+user    : parth
+target  : a.txt
 ```
+
+
+## Behavioral Detection
+
+KALYX extends beyond integrity verification by detecting suspicious execution patterns.
+
+Current detection capabilities include:
+
+- DELETE → CREATE sequences (possible file manipulation)
+- Repeated command execution patterns
+- Basic behavioral anomalies
+
+Detection is based on normalized event semantics:
+
+- action (CREATE, DELETE, MODIFY, EXEC)
+- target (file or resource)
+- execution sequence
+
+This enables KALYX to move from passive logging to active forensic signal generation.
 
 
 ## Completed Phases
@@ -114,6 +137,8 @@ Last hash   : 1a9af64...
 | Phase 2 | Controlled ingestion pipeline | ✅ |
 | Phase 3 | CLI packaging + reproducible tool | ✅ |
 | Phase 4 | Operational status + improved feedback | ✅ |
+| Phase 5 | eBPF live ingestion + enrichment | ✅ |
+| Phase 6 | Behavioral normalization + detection engine | ✅ |
 
 
 ## Security Boundary
@@ -122,15 +147,14 @@ KALYX guarantees:
 
 - Integrity of stored execution history  
 - Detection of modification  
-- Detection of deletion  
-- Detection of naive insertion  
-- Strict chronological linkage  
+- Detection of structural tampering  
+- Basic behavioral anomaly detection  
 
 KALYX does **not** guarantee:
 
 - Protection against full root compromise  
 - Authenticity of malicious but valid events  
-- Prevention of system takeover  
+- Detection of all advanced adversarial behavior  
 
 Integrity is enforced.  
 Authenticity depends on ingestion trust.
@@ -174,7 +198,7 @@ KALYX demonstrates:
 - Applied cryptographic integrity design  
 - Deterministic hash-domain enforcement  
 - Controlled ingestion boundaries  
-- Attack simulation validation  
+- Behavioral anomaly detection  
 - Reproducible software packaging  
 - Explicit security boundary modelling  
 
