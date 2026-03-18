@@ -19,8 +19,8 @@ def status():
         print("Status           : Ledger not created")
         return
 
-    with open(log_file) as f:
-        lines = f.readlines()
+    with open(log_file, "r", encoding="utf-8") as f:
+        lines = [line.strip() for line in f if line.strip()]
 
     count = len(lines)
     print(f"Entries          : {count}")
@@ -35,9 +35,44 @@ def status():
     print("Status           : Run `kalyx verify` to validate integrity")
 
 
+def inspect():
+    log_file = "logs/exec_chain.jsonl"
+
+    print("KALYX Ledger Inspection")
+    print("-----------------------")
+
+    if not os.path.exists(log_file):
+        print("[!] No ledger file found")
+        return
+
+    with open(log_file, "r", encoding="utf-8") as f:
+        lines = [line.strip() for line in f if line.strip()]
+
+    if not lines:
+        print("[!] Ledger is empty")
+        return
+
+    for i, line in enumerate(lines, start=1):
+        try:
+            entry = json.loads(line)
+        except json.JSONDecodeError:
+            print(f"[!] Invalid JSON at entry {i}")
+            continue
+
+        print(f"Entry {i}")
+        print(f"  comm      : {entry.get('comm', 'N/A')}")
+        print(f"  argv      : {entry.get('argv', 'N/A')}")
+        print(f"  pid       : {entry.get('pid', 'N/A')}")
+        print(f"  ppid      : {entry.get('ppid', 'N/A')}")
+        print(f"  ret       : {entry.get('ret', 'N/A')}")
+        print(f"  prev_hash : {entry.get('prev_hash', 'N/A')[:16]}...")
+        print(f"  hash      : {entry.get('hash', 'N/A')[:16]}...")
+        print()
+
+
 def main():
     if len(sys.argv) < 2:
-        print("Usage: kalyx [ingest|verify|status]")
+        print("Usage: kalyx [ingest|verify|status|inspect]")
         return
 
     if sys.argv[1] == "ingest":
@@ -46,6 +81,8 @@ def main():
         verify_chain()
     elif sys.argv[1] == "status":
         status()
+    elif sys.argv[1] == "inspect":
+        inspect()
     else:
         print("Unknown command")
 
