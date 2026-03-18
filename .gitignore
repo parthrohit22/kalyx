@@ -1,20 +1,4 @@
-# Logs and outputs
 logs/
-reports/
-
-# Python cache
-__pycache__/
-*.pyc
-
-# OS junk
-.DS_Store
-
-# Temp / runtime
-*.pid
-*.log
-
-.venv/
-logs/
-__pycache__/
-*.pyc
 kalyx.egg-info/
+__pycache__/
+*.pyc
