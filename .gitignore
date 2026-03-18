@@ -1,4 +1,25 @@
-logs/
-kalyx.egg-info/
+# Python
 __pycache__/
-*.pyc
+*.py[cod]
+*.pyo
+
+# Virtual env
+.venv/
+venv/
+env/
+
+# Logs & runtime data
+logs/
+reports/
+
+# OS junk
+.DS_Store
+
+# Editor
+.vscode/
+.idea/
+
+# Build
+*.egg-info/
+dist/
+build/

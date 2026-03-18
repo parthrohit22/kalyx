@@ -1,7 +1,13 @@
-from setuptools import setup
+from setuptools import setup, find_packages
 
 setup(
     name="kalyx",
     version="0.1",
-    packages=["kalyx", "kalyx.core", "kalyx.engine"],
+    packages=find_packages(),
+    install_requires=[],
+    entry_points={
+        "console_scripts": [
+            "kalyx=kalyx.cli:main",
+        ],
+    },
 )
