@@ -77,6 +77,8 @@ def inspect():
         print(f"  user      : {entry.get('user', 'N/A')}")
         print(f"  tty       : {entry.get('tty', 'N/A')}")
         print(f"  session   : {entry.get('session', 'N/A')}")
+        print(f"  parent_comm: {entry.get('parent_comm', 'N/A')}")
+        print(f"  parent_exe : {entry.get('parent_exe', 'N/A')}")
         print(f"  action    : {entry.get('action', 'N/A')}")
         print(f"  target    : {entry.get('target', 'N/A')}")
         print(f"  prev_hash : {entry.get('prev_hash', 'N/A')[:16]}...")
@@ -119,7 +121,7 @@ def export():
         "exported_at": datetime.utcnow().isoformat(),
         "total_records": len(records),
         "verification": "SUCCESS" if verification_result else "FAILED",
-        "records": records
+        "records": records,
     }
 
     with open(output_file, "w", encoding="utf-8") as out:
@@ -139,7 +141,7 @@ def audit():
             ["ausearch", "-k", "kalyx_ledger_watch", "-i"],
             capture_output=True,
             text=True,
-            check=True
+            check=True,
         )
     except Exception as e:
         print(f"[!] Failed to run ausearch: {e}")
@@ -166,7 +168,7 @@ def audit():
                     raw = line.split("msg=audit(")[1].split(")")[0]
                     parts = raw.rsplit(":", 1)
                     time = parts[0] if len(parts) > 1 else raw
-                except:
+                except Exception:
                     pass
 
             if "comm=" in line:
@@ -208,9 +210,48 @@ def audit():
         print()
 
 
+def show_alerts():
+    alert_file = "logs/alerts.jsonl"
+
+    print("KALYX Alert Log")
+    print("----------------")
+
+    if not os.path.exists(alert_file):
+        print("[!] No alert log found")
+        return
+
+    with open(alert_file, "r", encoding="utf-8") as f:
+        lines = [line.strip() for line in f if line.strip()]
+
+    if not lines:
+        print("[+] No persisted alerts")
+        return
+
+    for i, line in enumerate(lines, start=1):
+        try:
+            alert = json.loads(line)
+        except json.JSONDecodeError:
+            print(f"[!] Invalid alert entry at line {i}")
+            continue
+
+        print(f"Alert {i}")
+        print(f"  type         : {alert.get('type', 'N/A')}")
+        print(f"  severity     : {alert.get('severity', 'N/A')}")
+        print(f"  user         : {alert.get('user', 'N/A')}")
+        print(f"  target       : {alert.get('target', 'N/A')}")
+        print(f"  session      : {alert.get('session', 'N/A')}")
+        print(f"  seq_start    : {alert.get('seq_start', 'N/A')}")
+        print(f"  seq_end      : {alert.get('seq_end', 'N/A')}")
+        print(f"  ts_start     : {alert.get('ts_start', 'N/A')}")
+        print(f"  ts_end       : {alert.get('ts_end', 'N/A')}")
+        print(f"  delta_sec    : {alert.get('delta_seconds', 'N/A')}")
+        print(f"  details      : {alert.get('details', 'N/A')}")
+        print()
+
+
 def main():
     if len(sys.argv) < 2:
-        print("Usage: kalyx [ingest|ingest-live|verify|status|inspect|export|audit|detect] [--format json]")
+        print("Usage: kalyx [ingest|ingest-live|verify|status|inspect|export|audit|detect|alerts] [--format json]")
         return
 
     cmd = sys.argv[1]
@@ -220,7 +261,7 @@ def main():
         try:
             idx = sys.argv.index("--format")
             output_format = sys.argv[idx + 1]
-        except:
+        except Exception:
             print("[ERROR] Invalid format flag")
             return
 
@@ -247,6 +288,7 @@ def main():
 
     elif cmd == "detect":
         from kalyx.core.detector import load_events, detect_suspicious
+        from kalyx.core.alerts import persist_alerts
 
         events = load_events()
         alerts = detect_suspicious(events)
@@ -254,15 +296,33 @@ def main():
         if not alerts:
             print("[+] No suspicious patterns detected")
         else:
+            written = persist_alerts(alerts)
+
             print("[!] Suspicious activity detected")
+            print()
+
             for a in alerts:
-                print(f"  type    : {a['type']}")
-                print(f"  user    : {a.get('user', 'N/A')}")
-                print(f"  details : {a.get('details', a.get('command', 'N/A'))}")
+                print(f"  type         : {a.get('type', 'N/A')}")
+                print(f"  severity     : {a.get('severity', 'N/A')}")
+                print(f"  user         : {a.get('user', 'N/A')}")
+                print(f"  target       : {a.get('target', 'N/A')}")
+                print(f"  session      : {a.get('session', 'N/A')}")
+                print(f"  seq_start    : {a.get('seq_start', 'N/A')}")
+                print(f"  seq_end      : {a.get('seq_end', 'N/A')}")
+                print(f"  ts_start     : {a.get('ts_start', 'N/A')}")
+                print(f"  ts_end       : {a.get('ts_end', 'N/A')}")
+                print(f"  delta_sec    : {a.get('delta_seconds', 'N/A')}")
+                print(f"  details      : {a.get('details', 'N/A')}")
                 print()
+
+            print(f"[+] Persisted {written} new alert(s)")
+
+    elif cmd == "alerts":
+        show_alerts()
 
     else:
         print("Unknown command")
+
 
 if __name__ == "__main__":
     main()

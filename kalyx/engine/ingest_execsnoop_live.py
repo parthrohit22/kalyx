@@ -2,9 +2,10 @@ import shutil
 import subprocess
 
 from kalyx.core.chain import chain_event
-from kalyx.engine.parser import parse_execsnoop_line
-from kalyx.engine.enrichment import enrich_event
 from kalyx.core.normalize import normalize_event
+from kalyx.engine.enrichment import enrich_event
+from kalyx.engine.parser import parse_execsnoop_line
+
 
 IGNORE_PREFIXES = (
     "systemd",
@@ -34,10 +35,26 @@ IGNORE_EXACT = {
     "env",
     "sh",
     "bash",
+    "uname",
+    "who",
+    "tr",
+    "head",
+    "id",
+    "expr",
+    "bc",
+    "release-upgrade",
 }
 
 
-def should_ignore(comm: str, argv: str, pid: int, ppid: int) -> bool:
+def should_ignore(event: dict) -> bool:
+    comm = event.get("comm", "")
+    argv = event.get("argv", "")
+    pid = event.get("pid", -1)
+    ppid = event.get("ppid", -1)
+    user = event.get("user", "unknown")
+    session = event.get("session", "unknown")
+    action = event.get("action", "EXEC")
+
     if pid <= 0 or ppid <= 0:
         return True
 
@@ -48,6 +65,10 @@ def should_ignore(comm: str, argv: str, pid: int, ppid: int) -> bool:
         return True
 
     if "update-motd" in argv or "landscape" in argv:
+        return True
+
+    # Ignore obvious daemon/background root noise unless it looks meaningful
+    if user == "root" and session == "background_or_daemon" and action == "EXEC":
         return True
 
     return False
@@ -99,25 +120,22 @@ def main():
             if event is None:
                 continue
 
-            if should_ignore(
-                comm=event["comm"],
-                argv=event["argv"],
-                pid=event["pid"],
-                ppid=event["ppid"],
-            ):
-                skipped += 1
-                continue
-
             event = enrich_event(event)
             event = normalize_event(event)
             event["source"] = "ebpf_execsnoop"
+
+            if should_ignore(event):
+                skipped += 1
+                continue
 
             chain_event(event)
             ingested += 1
 
             print(
                 f"[INGEST] pid={event['pid']} ppid={event['ppid']} "
-                f"comm={event['comm']} user={event.get('user','?')} "
+                f"comm={event['comm']} user={event.get('user', '?')} "
+                f"action={event.get('action', '?')} "
+                f"target={event.get('target', '?')} "
                 f"argv={event['argv']}"
             )
 
