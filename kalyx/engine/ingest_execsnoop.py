@@ -1,26 +1,12 @@
-from kalyx.core.chain import chain_event
-RAW = "sample_exec.log"
+"""Sample file ingestion entry point."""
 
-def main():
-    count = 0
+from kalyx.services.pipeline import ingest_execsnoop_file
 
-    with open(RAW) as f:
-        for line in f:
-            p = line.strip().split(maxsplit=4)
-            if len(p) < 4:
-                continue
 
-            event = {
-                "comm": p[0],
-                "pid": int(p[1]),
-                "ppid": int(p[2]),
-                "ret": int(p[3]),
-                "argv": p[4] if len(p) == 5 else ""
-            }
+def main() -> None:
+    """Run sample log ingestion through the shared backend pipeline."""
 
-            chain_event(event)
-            count += 1
-
+    count = ingest_execsnoop_file()
     if count > 0:
         print(f"[+] Ingested {count} events")
         print("[+] Ledger updated")

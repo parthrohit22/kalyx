@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>KALYX Dashboard</title>
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+  <main class="dashboard">
+    <section class="panel">
+      <div class="eyebrow">KALYX</div>
+      <h1>Execution Integrity Dashboard</h1>
+      <p class="intro">
+        Lightweight web interface for the existing KALYX API. Each action calls the
+        live backend endpoints directly and displays the formatted JSON response below.
+      </p>
+
+      <div class="actions">
+        <button type="button" data-endpoint="/status" data-method="GET">Get Status</button>
+        <button type="button" data-endpoint="/verify" data-method="POST">Verify Ledger</button>
+        <button type="button" id="ingest-button">Ingest Test Event</button>
+        <button type="button" data-endpoint="/alerts" data-method="GET">View Alerts</button>
+      </div>
+
+      <div class="status-row">
+        <span id="loading" class="loading" hidden>Loading...</span>
+      </div>
+
+      <pre id="output" class="output">Select an action to view API output.</pre>
+    </section>
+  </main>
+
+  <script>
+    const output = document.getElementById("output");
+    const loading = document.getElementById("loading");
+
+    function setLoading(isLoading) {
+      loading.hidden = !isLoading;
+    }
+
+    function renderJson(data) {
+      output.textContent = JSON.stringify(data, null, 2);
+    }
+
+    async function callApi(endpoint, options = {}) {
+      setLoading(true);
+      output.textContent = "Waiting for response...";
+
+      try {
+        const response = await fetch(endpoint, options);
+        const data = await response.json();
+
+        if (!response.ok) {
+          renderJson({
+            error: true,
+            status: response.status,
+            response: data
+          });
+          return;
+        }
+
+        renderJson(data);
+      } catch (error) {
+        renderJson({
+          error: true,
+          message: error.message
+        });
+      } finally {
+        setLoading(false);
+      }
+    }
+
+    document.querySelectorAll("button[data-endpoint]").forEach((button) => {
+      button.addEventListener("click", () => {
+        callApi(button.dataset.endpoint, {
+          method: button.dataset.method
+        });
+      });
+    });
+
+    document.getElementById("ingest-button").addEventListener("click", () => {
+      callApi("/ingest", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          event: {
+            comm: "touch",
+            pid: 5000,
+            ppid: 4000,
+            ret: 0,
+            argv: "touch dashboard_test.txt",
+            uid: 0
+          },
+          source: "dashboard_test"
+        })
+      });
+    });
+  </script>
+</body>
+</html>

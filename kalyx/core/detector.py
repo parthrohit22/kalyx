@@ -53,7 +53,12 @@ def same_target(e1: dict, e2: dict) -> bool:
 
 
 def same_user(e1: dict, e2: dict) -> bool:
-    return e1.get("user") == e2.get("user")
+
+    u1 = e1.get("user")
+
+    u2 = e2.get("user")
+
+    return u1 not in (None, "", "unknown", "N/A") and u1 == u2
 
 
 def build_alert(
@@ -84,7 +89,7 @@ def build_alert(
     }
 
 
-def detect_delete_create(events, window_seconds=10):
+def detect_delete_create(events, window_seconds=300):
     alerts = []
 
     for i in range(len(events)):
@@ -96,15 +101,27 @@ def detect_delete_create(events, window_seconds=10):
         for j in range(i + 1, len(events)):
             e2 = events[j]
 
+            # skip irrelevant events
+            if e2.get("action") not in ["CREATE", "DELETE", "MODIFY"]:
+                continue
+
+            # time window check
             if not within_seconds(e1.get("ts", ""), e2.get("ts", ""), window_seconds):
-                break
+                continue
+
+            # user match logic (with fallback)
+            users_match = same_user(e1, e2) or (
+                e1.get("user") in (None, "", "unknown", "N/A")
+                and e2.get("user") in (None, "", "unknown", "N/A")
+            )
 
             if (
                 e2.get("action") == "CREATE"
                 and same_target(e1, e2)
-                and same_user(e1, e2)
+                and users_match
             ):
                 delta = seconds_between(e1.get("ts", ""), e2.get("ts", ""))
+
                 alerts.append(
                     build_alert(
                         alert_type="DELETE_CREATE",

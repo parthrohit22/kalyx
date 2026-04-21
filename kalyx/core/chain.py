@@ -1,23 +1,29 @@
-import json
-import hashlib
-from pathlib import Path
 from datetime import datetime
+import hashlib
+import json
+from pathlib import Path
 
 LOG_PATH = Path("logs/exec_chain.jsonl")
 GENESIS_HASH = "0" * 64
 
 
 def _sha256(s: str) -> str:
+    """Return a SHA-256 digest for a canonical string."""
+
     return hashlib.sha256(s.encode()).hexdigest()
 
 
 def _canonical(obj: dict) -> str:
+    """Serialize an event deterministically for hashing."""
+
     o = dict(obj)
     o.pop("hash", None)
     return json.dumps(o, sort_keys=True, separators=(",", ":"))
 
 
 def _get_last_entry():
+    """Load the most recent valid entry from the ledger."""
+
     if not LOG_PATH.exists():
         return None
 
@@ -37,6 +43,8 @@ def _get_last_entry():
 
 
 def chain_event(event: dict):
+    """Append an event to the hash-chained ledger and return the stored record."""
+
     LOG_PATH.parent.mkdir(parents=True, exist_ok=True)
 
     last_entry = _get_last_entry()
@@ -58,3 +66,5 @@ def chain_event(event: dict):
 
     with LOG_PATH.open("a", encoding="utf-8") as f:
         f.write(json.dumps(record) + "\n")
+
+    return record
