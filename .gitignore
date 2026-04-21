@@ -1,25 +1,11 @@
 # Python
 __pycache__/
 *.py[cod]
-*.pyc
-*.pyo
 
 # Virtual env
 .venv/
 venv/
 env/
-
-# Logs & runtime data
-logs/
-reports/
-*.log
-*.tmp
-
-# KALYX runtime data
-*.jsonl
-*.json
-demo.txt
-test.txt
 
 # OS junk
 .DS_Store
@@ -28,7 +14,7 @@ test.txt
 .vscode/
 .idea/
 
-# Build
+# Build / packaging
 *.egg-info/
 dist/
 build/
@@ -40,3 +26,16 @@ build/
 
 # Environment
 .env
+
+# Logs (runtime only)
+logs/*
+!logs/.keep
+
+# Ignore temp/test junk
+*.tmp
+demo.txt
+test.txt
+
+# Ignore bulk JSON logs but KEEP reports
+*.jsonl
+!reports/*.json

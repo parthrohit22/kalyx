@@ -1,0 +1,43 @@
+{
+    "exported_at": "2026-03-18T15:45:11.924297",
+    "total_records": 3,
+    "verification": "SUCCESS",
+    "records": [
+        {
+            "comm": "ls",
+            "pid": 100,
+            "ppid": 1,
+            "ret": 0,
+            "argv": "ls",
+            "seq": 1,
+            "ts": "2026-03-18T15:37:39.004658",
+            "source": "controlled_input",
+            "prev_hash": "0000000000000000000000000000000000000000000000000000000000000000",
+            "hash": "3c89e98d7ac96a6a4b638d5c6aaca75ea09c6d3ea94c022e7ab165d8e7982ade"
+        },
+        {
+            "comm": "toch",
+            "pid": 101,
+            "ppid": 1,
+            "ret": 0,
+            "argv": "touch test.txt",
+            "seq": 2,
+            "ts": "2026-03-18T15:37:39.004876",
+            "source": "controlled_input",
+            "prev_hash": "3c89e98d7ac96a6a4b638d5c6aaca75ea09c6d3ea94c022e7ab165d8e7982ade",
+            "hash": "451cac9bfe2d68cf84a7f66891c5edfe8bb2f71804596c5d8748a22ce8e42dbe"
+        },
+        {
+            "comm": "rm",
+            "pid": 102,
+            "ppid": 1,
+            "ret": 0,
+            "argv": "rm est.txt",
+            "seq": 3,
+            "ts": "2026-03-18T15:37:39.004964",
+            "source": "controlled_input",
+            "prev_hash": "451cac9bfe2d68cf84a7f66891c5edfe8bb2f71804596c5d8748a22ce8e42dbe",
+            "hash": "e7c9477eeee2fa07b7c62d6e713d0375a79cbe1995a03559bb4a457c7da7a8f1"
+        }
+    ]
+}
