@@ -15,6 +15,12 @@ reports/
 *.log
 *.tmp
 
+# KALYX runtime data
+*.jsonl
+*.json
+demo.txt
+test.txt
+
 # OS junk
 .DS_Store
 
