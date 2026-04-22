@@ -1,6 +1,6 @@
 """Data models used by KALYX interfaces."""
 
-from .api import AlertResponse, IngestRequest, IngestResponse, StatusResponse, VerifyResponse
+from .schema import AlertResponse, IngestRequest, IngestResponse, StatusResponse, VerifyResponse
 
 __all__ = [
     "AlertResponse",

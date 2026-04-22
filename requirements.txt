@@ -5,7 +5,7 @@ click==8.3.2
 fastapi==0.136.0
 h11==0.16.0
 idna==3.11
--e git+https://github.com/parthrohit22/kalyx.git@7d131aa8a2d91ccf1358beea07488e823c28aae8#egg=kalyx
+-e git+https://github.com/parthrohit22/kalyx.git@6990d4ce452bcc83290ccdbf40a4207d0de62771#egg=kalyx
 pydantic==2.13.3
 pydantic_core==2.46.3
 starlette==1.0.0
