@@ -11,8 +11,8 @@ setup(
     ],
     entry_points={
         "console_scripts": [
-            "kalyx=kalyx.cli:main",
-            "kalyx-api=kalyx.api.app:run",
+            "kalyx=kalyx.cli.app:main",
+            "kalyx-api=kalyx.api.main:run",
         ],
     },
 )

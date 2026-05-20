@@ -1,70 +1,120 @@
-from datetime import datetime
+from __future__ import annotations
+
+from datetime import datetime, timezone
 import hashlib
 import json
+import os
 from pathlib import Path
+from typing import Any
+
+import fcntl
+
 
 LOG_PATH = Path("logs/exec_chain.jsonl")
 GENESIS_HASH = "0" * 64
 
 
-def _sha256(s: str) -> str:
+def _sha256(value: str) -> str:
     """Return a SHA-256 digest for a canonical string."""
-
-    return hashlib.sha256(s.encode()).hexdigest()
-
-
-def _canonical(obj: dict) -> str:
-    """Serialize an event deterministically for hashing."""
-
-    o = dict(obj)
-    o.pop("hash", None)
-    return json.dumps(o, sort_keys=True, separators=(",", ":"))
+    return hashlib.sha256(value.encode("utf-8")).hexdigest()
 
 
-def _get_last_entry():
-    """Load the most recent valid entry from the ledger."""
+def _canonical(record: dict[str, Any]) -> str:
+    """
+    Serialize a ledger record deterministically.
 
-    if not LOG_PATH.exists():
-        return None
+    The stored hash is excluded from the hash domain so that the same
+    record can be recomputed during verification.
+    """
+    payload = dict(record)
+    payload.pop("hash", None)
 
-    with LOG_PATH.open("r", encoding="utf-8") as f:
-        lines = [line.strip() for line in f if line.strip()]
+    return json.dumps(
+        payload,
+        sort_keys=True,
+        separators=(",", ":"),
+        ensure_ascii=False,
+    )
 
-    if not lines:
-        return None
 
+def _parse_last_valid_entry(lines: list[str]) -> dict[str, Any] | None:
+    """
+    Return the last valid JSON object from ledger lines.
+
+    Invalid trailing lines are ignored here so a partially written final line
+    does not automatically destroy the ability to append. Verification should
+    still report corruption separately.
+    """
     for line in reversed(lines):
+        line = line.strip()
+        if not line:
+            continue
+
         try:
-            return json.loads(line)
+            entry = json.loads(line)
         except json.JSONDecodeError:
             continue
+
+        if isinstance(entry, dict):
+            return entry
 
     return None
 
 
-def chain_event(event: dict):
-    """Append an event to the hash-chained ledger and return the stored record."""
+def _utc_now_iso() -> str:
+    """Return a timezone-aware UTC timestamp."""
+    return datetime.now(timezone.utc).isoformat()
 
-    LOG_PATH.parent.mkdir(parents=True, exist_ok=True)
 
-    last_entry = _get_last_entry()
+def chain_event(
+    event: dict[str, Any],
+    ledger_path: Path = LOG_PATH,
+) -> dict[str, Any]:
+    """
+    Append an event to the hash-chained ledger atomically.
 
-    if last_entry:
-        prev_hash = last_entry["hash"]
-        seq = last_entry.get("seq", 0) + 1
-    else:
-        prev_hash = GENESIS_HASH
-        seq = 1
+    The previous hash, sequence number, record hash, and file append all happen
+    while holding an exclusive file lock. This prevents concurrent writers from
+    reading the same previous hash and creating an inconsistent chain.
+    """
+    ledger_path.parent.mkdir(parents=True, exist_ok=True)
 
-    record = dict(event)
-    record["seq"] = seq
-    record["ts"] = datetime.utcnow().isoformat()
-    record.setdefault("source", "unknown")
+    with ledger_path.open("a+", encoding="utf-8") as ledger_file:
+        fcntl.flock(ledger_file.fileno(), fcntl.LOCK_EX)
 
-    record["prev_hash"] = prev_hash
-    record["hash"] = _sha256(_canonical(record))
+        try:
+            ledger_file.seek(0)
+            lines = ledger_file.read().splitlines()
+            last_entry = _parse_last_valid_entry(lines)
 
-    with LOG_PATH.open("a", encoding="utf-8") as f:
-        f.write(json.dumps(record) + "\n")
+            if last_entry is not None:
+                prev_hash = last_entry["hash"]
+                seq = int(last_entry.get("seq", 0)) + 1
+            else:
+                prev_hash = GENESIS_HASH
+                seq = 1
 
-    return record
+            record = dict(event)
+            record["seq"] = seq
+            record["ts"] = _utc_now_iso()
+            record.setdefault("source", "unknown")
+            record["prev_hash"] = prev_hash
+            record["hash"] = _sha256(_canonical(record))
+
+            ledger_file.seek(0, os.SEEK_END)
+            ledger_file.write(
+                json.dumps(
+                    record,
+                    sort_keys=True,
+                    separators=(",", ":"),
+                    ensure_ascii=False,
+                )
+                + "\n"
+            )
+            ledger_file.flush()
+            os.fsync(ledger_file.fileno())
+
+            return record
+
+        finally:
+            fcntl.flock(ledger_file.fileno(), fcntl.LOCK_UN)

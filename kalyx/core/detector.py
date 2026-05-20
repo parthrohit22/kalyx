@@ -1,140 +1,160 @@
-import json
+"""Deterministic rule-based behavioural detection for KALYX."""
+
+from __future__ import annotations
+
 from datetime import datetime
-from pathlib import Path
-
-LOG_PATH = Path("logs/exec_chain.jsonl")
+from typing import Any
 
 
-def load_events(limit=100):
-    if not LOG_PATH.exists():
-        return []
-
-    with LOG_PATH.open("r", encoding="utf-8") as f:
-        lines = [line.strip() for line in f if line.strip()]
-
-    events = []
-    for line in lines[-limit:]:
-        try:
-            events.append(json.loads(line))
-        except json.JSONDecodeError:
-            continue
-
-    return events
+UNKNOWN_VALUES = {None, "", "unknown", "N/A"}
 
 
-def parse_ts(ts: str):
+def parse_ts(ts: str | None) -> datetime | None:
+    """Parse ISO timestamp safely."""
+    if not ts:
+        return None
+
     try:
         return datetime.fromisoformat(ts)
-    except Exception:
+    except ValueError:
         return None
 
 
-def seconds_between(ts1: str, ts2: str) -> float | None:
+def seconds_between(ts1: str | None, ts2: str | None) -> float | None:
+    """Return absolute seconds between two timestamps."""
     t1 = parse_ts(ts1)
     t2 = parse_ts(ts2)
 
-    if not t1 or not t2:
+    if t1 is None or t2 is None:
         return None
 
     return abs((t2 - t1).total_seconds())
 
 
-def within_seconds(ts1: str, ts2: str, seconds: int) -> bool:
+def within_seconds(ts1: str | None, ts2: str | None, seconds: int) -> bool:
+    """Return True if timestamps are within a time window."""
     delta = seconds_between(ts1, ts2)
-    if delta is None:
-        return False
-    return delta <= seconds
+    return delta is not None and delta <= seconds
 
 
-def same_target(e1: dict, e2: dict) -> bool:
-    t1 = e1.get("target", "unknown")
-    t2 = e2.get("target", "unknown")
-    return t1 != "unknown" and t1 == t2
+def is_known(value: Any) -> bool:
+    """Return True when a field contains a useful known value."""
+    return value not in UNKNOWN_VALUES
 
 
-def same_user(e1: dict, e2: dict) -> bool:
+def same_target(event_a: dict[str, Any], event_b: dict[str, Any]) -> bool:
+    """Return True when both events target the same known object."""
+    target_a = event_a.get("target")
+    target_b = event_b.get("target")
 
-    u1 = e1.get("user")
+    return is_known(target_a) and target_a == target_b
 
-    u2 = e2.get("user")
 
-    return u1 not in (None, "", "unknown", "N/A") and u1 == u2
+def same_user(event_a: dict[str, Any], event_b: dict[str, Any]) -> bool:
+    """Return True when both events belong to the same known user."""
+    user_a = event_a.get("user")
+    user_b = event_b.get("user")
+
+    return is_known(user_a) and user_a == user_b
+
+
+def both_users_unknown(event_a: dict[str, Any], event_b: dict[str, Any]) -> bool:
+    """Return True when neither event has a known user."""
+    return not is_known(event_a.get("user")) and not is_known(event_b.get("user"))
 
 
 def build_alert(
+    *,
     alert_type: str,
     severity: str,
-    user: str,
-    target: str,
+    user: Any,
+    target: Any,
     details: str,
-    seq_start=None,
-    seq_end=None,
-    ts_start=None,
-    ts_end=None,
-    delta_seconds=None,
-    session=None,
-):
+    seq_start: Any = None,
+    seq_end: Any = None,
+    ts_start: Any = None,
+    ts_end: Any = None,
+    delta_seconds: float | None = None,
+    session: Any = None,
+) -> dict[str, Any]:
+    """Build a stable alert object."""
     return {
         "type": alert_type,
         "severity": severity,
-        "user": user,
-        "target": target,
+        "user": user if is_known(user) else "unknown",
+        "target": target if is_known(target) else "unknown",
         "details": details,
         "seq_start": seq_start,
         "seq_end": seq_end,
         "ts_start": ts_start,
         "ts_end": ts_end,
-        "delta_seconds": round(delta_seconds, 3) if isinstance(delta_seconds, (int, float)) else "N/A",
-        "session": session or "N/A",
+        "delta_seconds": round(delta_seconds, 3)
+        if isinstance(delta_seconds, (int, float))
+        else None,
+        "session": session if is_known(session) else "unknown",
     }
 
 
-def detect_delete_create(events, window_seconds=300):
-    alerts = []
+def sort_events(events: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Sort events deterministically by sequence then timestamp."""
+    return sorted(
+        events,
+        key=lambda event: (
+            event.get("seq") if isinstance(event.get("seq"), int) else 10**12,
+            str(event.get("ts", "")),
+        ),
+    )
 
-    for i in range(len(events)):
-        e1 = events[i]
 
-        if e1.get("action") != "DELETE":
+def detect_delete_create(
+    events: list[dict[str, Any]],
+    *,
+    window_seconds: int = 300,
+) -> list[dict[str, Any]]:
+    """Detect delete-then-create replacement behaviour on the same target."""
+    alerts: list[dict[str, Any]] = []
+    ordered = sort_events(events)
+
+    for index, first_event in enumerate(ordered):
+        if first_event.get("action") != "DELETE":
             continue
 
-        for j in range(i + 1, len(events)):
-            e2 = events[j]
-
-            # skip irrelevant events
-            if e2.get("action") not in ["CREATE", "DELETE", "MODIFY"]:
+        for second_event in ordered[index + 1 :]:
+            if second_event.get("action") not in {"CREATE", "DELETE", "MODIFY"}:
                 continue
 
-            # time window check
-            if not within_seconds(e1.get("ts", ""), e2.get("ts", ""), window_seconds):
+            if not within_seconds(
+                first_event.get("ts"),
+                second_event.get("ts"),
+                window_seconds,
+            ):
                 continue
 
-            # user match logic (with fallback)
-            users_match = same_user(e1, e2) or (
-                e1.get("user") in (None, "", "unknown", "N/A")
-                and e2.get("user") in (None, "", "unknown", "N/A")
+            users_match = same_user(first_event, second_event) or both_users_unknown(
+                first_event,
+                second_event,
             )
 
             if (
-                e2.get("action") == "CREATE"
-                and same_target(e1, e2)
+                second_event.get("action") == "CREATE"
+                and same_target(first_event, second_event)
                 and users_match
             ):
-                delta = seconds_between(e1.get("ts", ""), e2.get("ts", ""))
+                delta = seconds_between(first_event.get("ts"), second_event.get("ts"))
 
                 alerts.append(
                     build_alert(
                         alert_type="DELETE_CREATE",
                         severity="HIGH",
-                        user=e2.get("user", "unknown"),
-                        target=e2.get("target", "unknown"),
-                        details=f"{e1.get('action')} -> {e2.get('action')} within {window_seconds}s",
-                        seq_start=e1.get("seq"),
-                        seq_end=e2.get("seq"),
-                        ts_start=e1.get("ts"),
-                        ts_end=e2.get("ts"),
+                        user=second_event.get("user"),
+                        target=second_event.get("target"),
+                        details=f"DELETE followed by CREATE within {window_seconds}s",
+                        seq_start=first_event.get("seq"),
+                        seq_end=second_event.get("seq"),
+                        ts_start=first_event.get("ts"),
+                        ts_end=second_event.get("ts"),
                         delta_seconds=delta,
-                        session=e2.get("session"),
+                        session=second_event.get("session"),
                     )
                 )
                 break
@@ -142,44 +162,51 @@ def detect_delete_create(events, window_seconds=300):
     return alerts
 
 
-def detect_modify_burst(events, window_seconds=10, threshold=2):
-    alerts = []
-    grouped = {}
+def detect_modify_burst(
+    events: list[dict[str, Any]],
+    *,
+    window_seconds: int = 10,
+    threshold: int = 2,
+) -> list[dict[str, Any]]:
+    """Detect repeated MODIFY actions against the same target."""
+    alerts: list[dict[str, Any]] = []
+    grouped: dict[tuple[Any, Any], list[dict[str, Any]]] = {}
 
-    for event in events:
+    for event in sort_events(events):
         if event.get("action") != "MODIFY":
             continue
 
-        key = (event.get("user"), event.get("target"))
-        grouped.setdefault(key, []).append(event)
-
-    for (user, target), evs in grouped.items():
-        if target in (None, "", "unknown"):
+        target = event.get("target")
+        if not is_known(target):
             continue
 
-        evs = sorted(evs, key=lambda x: x.get("ts", ""))
+        key = (event.get("user"), target)
+        grouped.setdefault(key, []).append(event)
 
-        burst_start = 0
-        burst_count = 1
+    for (user, target), group in grouped.items():
+        group = sort_events(group)
 
-        for i in range(1, len(evs)):
-            if within_seconds(evs[i - 1].get("ts", ""), evs[i].get("ts", ""), window_seconds):
-                burst_count += 1
-            else:
-                burst_start = i
-                burst_count = 1
+        for start_index in range(len(group)):
+            first = group[start_index]
+            burst = [first]
 
-            if burst_count >= threshold:
-                first = evs[burst_start]
-                last = evs[i]
-                delta = seconds_between(first.get("ts", ""), last.get("ts", ""))
+            for candidate in group[start_index + 1 :]:
+                if within_seconds(first.get("ts"), candidate.get("ts"), window_seconds):
+                    burst.append(candidate)
+                else:
+                    break
+
+            if len(burst) >= threshold:
+                last = burst[-1]
+                delta = seconds_between(first.get("ts"), last.get("ts"))
+
                 alerts.append(
                     build_alert(
                         alert_type="MODIFY_BURST",
                         severity="MEDIUM",
-                        user=user or "unknown",
+                        user=user,
                         target=target,
-                        details=f"{burst_count} MODIFY events within {window_seconds}s",
+                        details=f"{len(burst)} MODIFY events within {window_seconds}s",
                         seq_start=first.get("seq"),
                         seq_end=last.get("seq"),
                         ts_start=first.get("ts"),
@@ -193,45 +220,55 @@ def detect_modify_burst(events, window_seconds=10, threshold=2):
     return alerts
 
 
-def detect_destructive_burst(events, window_seconds=15, threshold=3):
-    alerts = []
-    destructive = {"DELETE", "MODIFY"}
-    grouped = {}
+def detect_destructive_burst(
+    events: list[dict[str, Any]],
+    *,
+    window_seconds: int = 15,
+    threshold: int = 3,
+) -> list[dict[str, Any]]:
+    """Detect multiple destructive actions in one user/session window."""
+    alerts: list[dict[str, Any]] = []
+    destructive_actions = {"DELETE", "MODIFY"}
+    grouped: dict[tuple[Any, Any], list[dict[str, Any]]] = {}
 
-    for event in events:
-        if event.get("action") not in destructive:
+    for event in sort_events(events):
+        if event.get("action") not in destructive_actions:
             continue
 
         key = (event.get("user"), event.get("session"))
         grouped.setdefault(key, []).append(event)
 
-    for (user, session), evs in grouped.items():
-        evs = sorted(evs, key=lambda x: x.get("ts", ""))
+    for (user, session), group in grouped.items():
+        group = sort_events(group)
 
-        for i in range(len(evs)):
-            count = 1
-            targets = {evs[i].get("target", "unknown")}
-            last_index = i
+        for start_index in range(len(group)):
+            first = group[start_index]
+            burst = [first]
 
-            for j in range(i + 1, len(evs)):
-                if not within_seconds(evs[i].get("ts", ""), evs[j].get("ts", ""), window_seconds):
+            for candidate in group[start_index + 1 :]:
+                if within_seconds(first.get("ts"), candidate.get("ts"), window_seconds):
+                    burst.append(candidate)
+                else:
                     break
 
-                count += 1
-                targets.add(evs[j].get("target", "unknown"))
-                last_index = j
+            if len(burst) >= threshold:
+                last = burst[-1]
+                targets = sorted(
+                    {
+                        str(event.get("target"))
+                        for event in burst
+                        if is_known(event.get("target"))
+                    }
+                )
+                delta = seconds_between(first.get("ts"), last.get("ts"))
 
-            if count >= threshold:
-                first = evs[i]
-                last = evs[last_index]
-                delta = seconds_between(first.get("ts", ""), last.get("ts", ""))
                 alerts.append(
                     build_alert(
                         alert_type="DESTRUCTIVE_BURST",
                         severity="HIGH",
-                        user=user or "unknown",
-                        target=", ".join(sorted(t for t in targets if t != "unknown")) or "multiple",
-                        details=f"{count} destructive actions in {window_seconds}s from session {session}",
+                        user=user,
+                        target=", ".join(targets) if targets else "multiple",
+                        details=f"{len(burst)} destructive actions within {window_seconds}s",
                         seq_start=first.get("seq"),
                         seq_end=last.get("seq"),
                         ts_start=first.get("ts"),
@@ -244,17 +281,21 @@ def detect_destructive_burst(events, window_seconds=15, threshold=3):
 
     return alerts
 
-def detect_scripted_destructive_action(events):
-    alerts = []
-    risky_parents = {"python", "sh", "bash", "perl", "ruby"}
-    destructive = {"DELETE", "MODIFY"}
 
-    for event in events:
+def detect_scripted_destructive_action(
+    events: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    """Detect destructive actions launched by scripting parents outside interactive sessions."""
+    alerts: list[dict[str, Any]] = []
+    risky_parents = {"python", "python3", "sh", "bash", "perl", "ruby"}
+    destructive_actions = {"DELETE", "MODIFY"}
+
+    for event in sort_events(events):
         action = event.get("action", "EXEC")
         parent_comm = event.get("parent_comm", "unknown")
         session = event.get("session", "unknown")
 
-        if action not in destructive:
+        if action not in destructive_actions:
             continue
 
         if parent_comm not in risky_parents:
@@ -267,8 +308,8 @@ def detect_scripted_destructive_action(events):
             build_alert(
                 alert_type="SCRIPTED_DESTRUCTIVE_ACTION",
                 severity="HIGH",
-                user=event.get("user", "unknown"),
-                target=event.get("target", "unknown"),
+                user=event.get("user"),
+                target=event.get("target"),
                 details=f"{action} launched by parent {parent_comm} in non-interactive session",
                 seq_start=event.get("seq"),
                 seq_end=event.get("seq"),
@@ -281,30 +322,43 @@ def detect_scripted_destructive_action(events):
 
     return alerts
 
-def deduplicate_alerts(alerts):
-    seen = set()
-    unique = []
+
+def alert_key(alert: dict[str, Any]) -> tuple[Any, ...]:
+    """Return stable alert identity for deduplication."""
+    return (
+        alert.get("type"),
+        alert.get("severity"),
+        alert.get("user"),
+        alert.get("target"),
+        alert.get("seq_start"),
+        alert.get("seq_end"),
+        alert.get("session"),
+    )
+
+
+def deduplicate_alerts(alerts: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Remove duplicate alerts while preserving deterministic order."""
+    seen: set[tuple[Any, ...]] = set()
+    unique: list[dict[str, Any]] = []
 
     for alert in alerts:
-        key = (
-            alert.get("type"),
-            alert.get("user"),
-            alert.get("target"),
-            alert.get("seq_start"),
-            alert.get("seq_end"),
-        )
+        key = alert_key(alert)
         if key in seen:
             continue
+
         seen.add(key)
         unique.append(alert)
 
     return unique
 
 
-def detect_suspicious(events):
-    alerts = []
+def detect_suspicious(events: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Run all deterministic detection rules over supplied events."""
+    alerts: list[dict[str, Any]] = []
+
     alerts.extend(detect_delete_create(events))
     alerts.extend(detect_modify_burst(events))
     alerts.extend(detect_destructive_burst(events))
     alerts.extend(detect_scripted_destructive_action(events))
+
     return deduplicate_alerts(alerts)

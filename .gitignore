@@ -1,41 +1,87 @@
+# =========================================================
 # Python
+# =========================================================
+
 __pycache__/
 *.py[cod]
+*.pyo
+*.pyd
 
-# Virtual env
+# Virtual environments
 .venv/
 venv/
 env/
 
-# OS junk
-.DS_Store
+# Pytest / coverage
+.pytest_cache/
+.coverage
+htmlcov/
 
-# Editor
-.vscode/
-.idea/
-
-# Build / packaging
+# Packaging
 *.egg-info/
-dist/
 build/
+dist/
 
-# Archives
-*.zip
-*.tar
-*.gz
+# =========================================================
+# Frontend (Angular)
+# =========================================================
 
-# Environment
-.env
+frontend/node_modules/
+frontend/.angular/
+frontend/dist/
+frontend/.cache/
 
-# Logs (runtime only)
+# =========================================================
+# Logs / Runtime Artifacts
+# =========================================================
+
 logs/*
 !logs/.keep
 
-# Ignore temp/test junk
+# Runtime exports / temp data
 *.tmp
+
+# Optional temporary backups
+*.backup
+*.bak
+
+# Ignore runtime JSONL ledgers
+*.jsonl
+
+# Keep exported reports
+!reports/
+!reports/*.json
+!reports/*.md
+
+# =========================================================
+# Environment / Secrets
+# =========================================================
+
+.env
+.env.*
+
+# =========================================================
+# Editor / OS
+# =========================================================
+
+.vscode/
+.idea/
+
+.DS_Store
+Thumbs.db
+
+# =========================================================
+# Archives
+# =========================================================
+
+*.zip
+*.tar
+*.gz
+*.rar
+
+# =========================================================
+# Misc project junk
+# =========================================================
+
 demo.txt
 test.txt
-
-# Ignore bulk JSON logs but KEEP reports
-*.jsonl
-!reports/*.json
