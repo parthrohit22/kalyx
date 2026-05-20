@@ -1,15 +1,32 @@
-"""FastAPI application exposing the shared KALYX backend services and web UI."""
+"""FastAPI application exposing shared KALYX backend services."""
 
 from __future__ import annotations
 
 from pathlib import Path
+from typing import Annotated, Any
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Query
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 
-from kalyx.models import AlertResponse, IngestRequest, IngestResponse, StatusResponse, VerifyResponse
-from kalyx.services import get_status_summary, ingest_payload, load_alerts, verify_ledger_state
+from kalyx.models import (
+    AlertResponse,
+    DetectionResponse,
+    IngestRequest,
+    IngestResponse,
+    LedgerResponse,
+    StatusResponse,
+    VerifyResponse,
+)
+from kalyx.services import (
+    detect_and_persist_alerts,
+    get_status_summary,
+    ingest_payload,
+    load_alerts,
+    load_ledger_records,
+    verify_ledger_state,
+)
 
 API_DIR = Path(__file__).resolve().parent
 DASHBOARD_PATH = API_DIR / "dashboard.html"
@@ -18,56 +35,132 @@ STATIC_DIR = API_DIR / "static"
 app = FastAPI(
     title="KALYX API",
     version="0.1.0",
-    description="Backend-driven execution integrity platform API.",
+    description="Deterministic tamper-evident execution logging API.",
 )
 
-app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
+# Angular frontend access
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[
+        "http://localhost:4200",
+        "http://127.0.0.1:4200",
+    ],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+if STATIC_DIR.exists():
+    app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 
 
 @app.get("/", response_class=HTMLResponse)
 def dashboard() -> HTMLResponse:
-    """Serve the lightweight KALYX web dashboard."""
+    """
+    Serve a minimal API status page.
 
-    return HTMLResponse(DASHBOARD_PATH.read_text(encoding="utf-8"))
+    The real operations console lives in the separate Angular frontend
+    under frontend/. FastAPI remains the backend API authority.
+    """
+    if not DASHBOARD_PATH.exists():
+        raise HTTPException(
+            status_code=404,
+            detail="API status page file not found",
+        )
+
+    return HTMLResponse(
+        DASHBOARD_PATH.read_text(encoding="utf-8"),
+    )
 
 
 @app.post("/ingest", response_model=IngestResponse)
 def post_ingest(request: IngestRequest) -> IngestResponse:
     """Ingest a single event through the shared processing pipeline."""
+    event: dict[str, Any] | None = None
+
+    if request.event is not None:
+        event = request.event.model_dump()
 
     try:
-        record = ingest_payload(raw_line=request.raw_line, event=request.event, source=request.source)
+        record = ingest_payload(
+            raw_line=request.raw_line,
+            event=event,
+            source=request.source,
+        )
+
     except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
-    return IngestResponse(ingested=True, record=record)
+        raise HTTPException(
+            status_code=400,
+            detail=str(exc),
+        ) from exc
+
+    return IngestResponse(
+        ingested=True,
+        record=record,
+    )
 
 
 @app.post("/verify", response_model=VerifyResponse)
 def post_verify() -> VerifyResponse:
     """Verify the ledger deterministically."""
-
-    result = verify_ledger_state()
+    result = verify_ledger_state(write_checkpoint=True)
     return VerifyResponse(**result)
 
 
 @app.get("/status", response_model=StatusResponse)
 def get_status() -> StatusResponse:
     """Return current ledger health and verification metadata."""
-
-    return StatusResponse(**get_status_summary())
+    summary = get_status_summary()
+    return StatusResponse(**summary)
 
 
 @app.get("/alerts", response_model=AlertResponse)
 def get_alerts() -> AlertResponse:
     """Return persisted alerts."""
-
     alerts = load_alerts()
-    return AlertResponse(alerts=alerts, count=len(alerts))
+
+    return AlertResponse(
+        alerts=alerts,
+        count=len(alerts),
+    )
+
+
+@app.get("/ledger", response_model=LedgerResponse)
+def get_ledger(
+    limit: Annotated[int, Query(ge=1, le=500)] = 50,
+) -> LedgerResponse:
+    """
+    Return recent parsed ledger records.
+
+    This endpoint is for inspection only and does not establish trust.
+    """
+    records = load_ledger_records(strict=False)
+    recent = records[-limit:]
+
+    return LedgerResponse(
+        records=recent,
+        count=len(recent),
+    )
+
+
+@app.post("/detect", response_model=DetectionResponse)
+def post_detect() -> DetectionResponse:
+    """
+    Run deterministic behavioural detection.
+
+    Detection services remain verification-gated and backend-authoritative.
+    """
+    result = detect_and_persist_alerts()
+    return DetectionResponse(**result)
 
 
 def run() -> None:
-    """Run the API with uvicorn when invoked as a console script."""
-
+    """Run the FastAPI application."""
     import uvicorn
 
-    uvicorn.run("kalyx.api.main:app", host="0.0.0.0", port=8000, reload=False)
+    uvicorn.run(
+        "kalyx.api.main:app",
+        host="0.0.0.0",
+        port=8000,
+        reload=False,
+    )

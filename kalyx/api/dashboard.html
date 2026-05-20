@@ -3,101 +3,63 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>KALYX Dashboard</title>
-  <link rel="stylesheet" href="/static/style.css">
+  <title>KALYX API</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #0f1318;
+      --panel: #171d23;
+      --line: #2a343d;
+      --text: #edf2f6;
+      --muted: #a5b0ba;
+      --green: #37c98f;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      min-height: 100vh;
+      margin: 0;
+      display: grid;
+      place-items: center;
+      padding: 24px;
+      background: var(--bg);
+      color: var(--text);
+      font-family: Inter, "Segoe UI", system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+    }
+
+    main {
+      width: min(680px, 100%);
+      padding: 28px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--panel);
+    }
+
+    p {
+      color: var(--muted);
+      line-height: 1.6;
+    }
+
+    code {
+      color: var(--green);
+      font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+    }
+  </style>
 </head>
 <body>
-  <main class="dashboard">
-    <section class="panel">
-      <div class="eyebrow">KALYX</div>
-      <h1>Execution Integrity Dashboard</h1>
-      <p class="intro">
-        Lightweight web interface for the existing KALYX API. Each action calls the
-        live backend endpoints directly and displays the formatted JSON response below.
-      </p>
-
-      <div class="actions">
-        <button type="button" data-endpoint="/status" data-method="GET">Get Status</button>
-        <button type="button" data-endpoint="/verify" data-method="POST">Verify Ledger</button>
-        <button type="button" id="ingest-button">Ingest Test Event</button>
-        <button type="button" data-endpoint="/alerts" data-method="GET">View Alerts</button>
-      </div>
-
-      <div class="status-row">
-        <span id="loading" class="loading" hidden>Loading...</span>
-      </div>
-
-      <pre id="output" class="output">Select an action to view API output.</pre>
-    </section>
+  <main>
+    <h1>KALYX API is running</h1>
+    <p>
+      The operations console is now a separate Angular frontend.
+      Start it with <code>cd frontend && npm install && npm start</code>.
+    </p>
+    <p>
+      FastAPI remains the backend authority for ingestion, ledger writes,
+      verification, detection, and alert persistence.
+    </p>
   </main>
-
-  <script>
-    const output = document.getElementById("output");
-    const loading = document.getElementById("loading");
-
-    function setLoading(isLoading) {
-      loading.hidden = !isLoading;
-    }
-
-    function renderJson(data) {
-      output.textContent = JSON.stringify(data, null, 2);
-    }
-
-    async function callApi(endpoint, options = {}) {
-      setLoading(true);
-      output.textContent = "Waiting for response...";
-
-      try {
-        const response = await fetch(endpoint, options);
-        const data = await response.json();
-
-        if (!response.ok) {
-          renderJson({
-            error: true,
-            status: response.status,
-            response: data
-          });
-          return;
-        }
-
-        renderJson(data);
-      } catch (error) {
-        renderJson({
-          error: true,
-          message: error.message
-        });
-      } finally {
-        setLoading(false);
-      }
-    }
-
-    document.querySelectorAll("button[data-endpoint]").forEach((button) => {
-      button.addEventListener("click", () => {
-        callApi(button.dataset.endpoint, {
-          method: button.dataset.method
-        });
-      });
-    });
-
-    document.getElementById("ingest-button").addEventListener("click", () => {
-      callApi("/ingest", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json"
-        },
-        body: JSON.stringify({
-          event: {
-            comm: "touch",
-            pid: 5000,
-            ppid: 4000,
-            ret: 0,
-            argv: "touch dashboard_test.txt",
-            uid: 0
-          },
-          source: "dashboard_test"
-        })
-      });
-    });
-  </script>
 </body>
 </html>
