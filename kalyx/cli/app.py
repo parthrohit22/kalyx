@@ -8,6 +8,7 @@ import sys
 from typing import Any
 
 from kalyx.services import (
+    LedgerNotTrustedError,
     create_checkpoint,
     detect_and_persist_alerts,
     export_ledger_bundle,
@@ -358,7 +359,12 @@ def main() -> None:
         raise SystemExit(2) from exc
 
     if cmd == "ingest":
-        count = ingest_execsnoop_file()
+        try:
+            count = ingest_execsnoop_file()
+        except LedgerNotTrustedError as exc:
+            print(f"[ERROR] {exc}")
+            raise SystemExit(1) from exc
+
         print(f"[+] Ingested {count} event(s)" if count else "[!] No valid events found")
         return
 
@@ -374,6 +380,9 @@ def main() -> None:
             print(f"[ERROR] {exc}")
             raise SystemExit(1) from exc
         except RuntimeError as exc:
+            print(f"[ERROR] {exc}")
+            raise SystemExit(1) from exc
+        except LedgerNotTrustedError as exc:
             print(f"[ERROR] {exc}")
             raise SystemExit(1) from exc
         except KeyboardInterrupt:
