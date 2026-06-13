@@ -59,6 +59,8 @@ curl -X POST http://127.0.0.1:8000/ingest \
 This is lightweight local API protection. It is not user authentication, sessions,
 OAuth, JWT, or role-based access control.
 
+See `docs/CONFIGURATION.md` for the central environment variable reference.
+
 ## Endpoint Summary
 
 | Method | Path | Protection | Description |

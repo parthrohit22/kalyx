@@ -5,9 +5,14 @@ KALYX tests focus on correctness properties that support the project's integrity
 Run the suite:
 
 ```bash
+python3 -m pip install -e . pytest
 python3 -m compileall kalyx
 python3 -m pytest -q
 ```
+
+Runtime dependencies are declared in `pyproject.toml`. `requirements.txt` is a
+local backend development convenience file that installs this checkout editable
+plus `pytest`.
 
 The Angular operations console is built separately:
 
@@ -29,7 +34,7 @@ npm test
 GitHub Actions runs automated validation on pull requests and pushes to `main`.
 The workflow is intentionally small and only checks the project baseline:
 
-- install backend dependencies from a fresh checkout
+- install backend dependencies with `python3 -m pip install -e . pytest`
 - compile Python sources with `python3 -m compileall kalyx`
 - run backend tests with `python3 -m pytest -q`
 - install frontend dependencies with `npm ci`
