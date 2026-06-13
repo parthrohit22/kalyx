@@ -33,6 +33,8 @@ KALYX treats these as untrusted or only partially trusted:
 - malformed ledger lines
 - persisted alerts loaded from disk
 - event source truthfulness
+- callers that know the optional local API key, because the key gates operational
+  API access but does not prove event truth
 
 ## Ingestion Assumptions
 
@@ -43,14 +45,18 @@ It assumes:
 - an accepted event is the payload KALYX received
 - required fields can be validated for shape and type
 - enrichment is useful context, not authoritative proof
+- if `KALYX_API_KEY` is configured, protected operational API requests have
+  presented the shared local API key
 
 It does not assume:
 
 - a raw line came from a trusted kernel source
-- an API caller is authenticated
+- an API caller is a known user or trusted event source
 - a process event cannot be forged before ingestion
 
-Authenticated ingestion is a roadmap item.
+When `KALYX_API_KEY` is unset, local API development remains open. When it is set,
+the key is lightweight local API protection, not full authentication, RBAC, source
+attestation, or tamper-proofing.
 
 ## Ledger Assumptions
 

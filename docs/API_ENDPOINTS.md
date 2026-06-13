@@ -14,17 +14,62 @@ Start the server:
 kalyx-api
 ```
 
+## API Key Protection
+
+KALYX supports optional environment-variable API key protection for operational
+routes. When `KALYX_API_KEY` is unset, local development behavior is preserved and
+protected routes are allowed without a header. When `KALYX_API_KEY` is set,
+protected routes require this request header:
+
+```text
+X-KALYX-API-Key: <configured-key>
+```
+
+Missing or invalid keys return:
+
+```json
+{
+  "detail": "Missing or invalid API key"
+}
+```
+
+with HTTP status `401 Unauthorized`.
+
+Example:
+
+```bash
+KALYX_API_KEY=example-dev-key kalyx-api
+
+curl -X POST http://127.0.0.1:8000/ingest \
+  -H 'Content-Type: application/json' \
+  -H 'X-KALYX-API-Key: example-dev-key' \
+  -d '{
+    "event": {
+      "comm": "touch",
+      "pid": 5000,
+      "ppid": 4000,
+      "argv": "touch /tmp/kalyx-api.txt",
+      "ret": 0,
+      "uid": 1000
+    },
+    "source": "api"
+  }'
+```
+
+This is lightweight local API protection. It is not user authentication, sessions,
+OAuth, JWT, or role-based access control.
+
 ## Endpoint Summary
 
-| Method | Path | Description |
-| --- | --- | --- |
-| `GET` | `/` | Serve a minimal API-running status page |
-| `GET` | `/status` | Return ledger status, trust state, and checkpoint metadata |
-| `POST` | `/verify` | Run deterministic ledger verification and write a local checkpoint when safe |
-| `POST` | `/ingest` | Ingest one raw line or structured execution event |
-| `POST` | `/detect` | Run deterministic detection through the shared detection service |
-| `GET` | `/alerts` | Return persisted alert records |
-| `GET` | `/ledger` | Return recent parsed ledger records for inspection |
+| Method | Path | Protection | Description |
+| --- | --- | --- | --- |
+| `GET` | `/` | Unprotected | Serve a minimal API-running status page |
+| `GET` | `/status` | Unprotected | Return ledger status, trust state, and checkpoint metadata |
+| `POST` | `/verify` | API key when configured | Run deterministic ledger verification and write a local checkpoint when safe |
+| `POST` | `/ingest` | API key when configured | Ingest one raw line or structured execution event |
+| `POST` | `/detect` | API key when configured | Run deterministic detection through the shared detection service |
+| `GET` | `/alerts` | Unprotected | Return persisted alert records |
+| `GET` | `/ledger` | Unprotected | Return recent parsed ledger records for inspection |
 
 ## GET /
 
