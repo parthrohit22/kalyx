@@ -14,6 +14,19 @@ from kalyx.core.chain import GENESIS_HASH, LOG_PATH, _canonical, _sha256
 
 STATUS_PATH = Path("logs/.kalyx_status.json")
 CHECKPOINT_PATH = Path("logs/checkpoints.jsonl")
+CHECKPOINT_REQUIRED_FIELDS = {
+    "version",
+    "checkpoint_index",
+    "created_at",
+    "ledger_file",
+    "record_count",
+    "last_seq",
+    "last_hash",
+    "verification_status",
+    "verification_valid",
+    "previous_checkpoint_hash",
+    "checkpoint_hash",
+}
 
 
 def _utc_now_iso() -> str:
@@ -49,6 +62,257 @@ def _canonical_checkpoint(record: dict[str, Any]) -> str:
 def _checkpoint_digest(record: dict[str, Any]) -> str:
     """Return the deterministic checkpoint hash."""
     return _sha256(_canonical_checkpoint(record))
+
+
+def _base_checkpoint_report(
+    checkpoint_path: Path,
+    *,
+    available: bool = False,
+) -> dict[str, Any]:
+    """Return default checkpoint continuity metadata."""
+    return {
+        "checkpoint_file": str(checkpoint_path),
+        "checkpoint_available": available,
+        "checkpoint_state": "NO_CHECKPOINT",
+        "checkpoint_gap_detected": False,
+        "checkpoint_reason": None,
+        "checkpoint_index": None,
+        "checkpoint_record_count": 0,
+        "checkpoint_last_hash": None,
+        "checkpoint_hash": None,
+        "checkpoint_created_at": None,
+        "checkpoint_previous_hash": None,
+    }
+
+
+def _attach_checkpoint_metadata(
+    report: dict[str, Any],
+    checkpoint: dict[str, Any],
+) -> None:
+    """Attach checkpoint fields exposed through status and verification responses."""
+    report.update(
+        {
+            "checkpoint_available": True,
+            "checkpoint_index": checkpoint.get("checkpoint_index"),
+            "checkpoint_record_count": int(checkpoint.get("record_count") or 0),
+            "checkpoint_last_hash": checkpoint.get("last_hash"),
+            "checkpoint_hash": checkpoint.get("checkpoint_hash"),
+            "checkpoint_created_at": checkpoint.get("created_at"),
+            "checkpoint_previous_hash": checkpoint.get("previous_checkpoint_hash"),
+        }
+    )
+
+
+def _mark_checkpoint_gap(
+    report: dict[str, Any],
+    reason: str,
+    *,
+    checkpoint: dict[str, Any] | None = None,
+    index: int | None = None,
+) -> dict[str, Any]:
+    """Mark checkpoint history or ledger continuity as untrusted."""
+    report["checkpoint_available"] = True
+    report["checkpoint_state"] = reason
+    report["checkpoint_gap_detected"] = True
+    report["checkpoint_reason"] = reason
+
+    if checkpoint is not None:
+        _attach_checkpoint_metadata(report, checkpoint)
+    elif index is not None:
+        report["checkpoint_index"] = index
+
+    return report
+
+
+def _is_hash(value: Any) -> bool:
+    """Return True when a value looks like a SHA-256 hex digest."""
+    return (
+        isinstance(value, str)
+        and len(value) == 64
+        and all(character in "0123456789abcdef" for character in value.lower())
+    )
+
+
+def _parse_checkpoint_lines_from_open_file(handle) -> tuple[list[dict[str, Any]], dict[str, Any] | None, bool]:
+    """Parse checkpoint lines without ignoring malformed checkpoint history."""
+    handle.seek(0)
+    checkpoints: list[dict[str, Any]] = []
+    available = False
+
+    for index, line in enumerate(handle, start=1):
+        line = line.strip()
+
+        if not line:
+            continue
+
+        available = True
+
+        try:
+            checkpoint = json.loads(line)
+        except json.JSONDecodeError:
+            return checkpoints, {"reason": "INVALID_CHECKPOINT_JSON", "index": index}, available
+
+        if not isinstance(checkpoint, dict):
+            return checkpoints, {"reason": "INVALID_CHECKPOINT_RECORD_TYPE", "index": index}, available
+
+        checkpoints.append(checkpoint)
+
+    return checkpoints, None, available
+
+
+def _parse_checkpoint_lines(
+    checkpoint_path: Path,
+) -> tuple[list[dict[str, Any]], dict[str, Any] | None, bool]:
+    """Parse checkpoint records from disk for integrity validation."""
+    if not checkpoint_path.exists():
+        return [], None, False
+
+    with checkpoint_path.open("r", encoding="utf-8") as handle:
+        return _parse_checkpoint_lines_from_open_file(handle)
+
+
+def _checkpoint_int(value: Any) -> int | None:
+    """Return a checkpoint integer field when it is valid."""
+    if isinstance(value, bool):
+        return None
+
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def validate_checkpoint_history(
+    checkpoint_path: Path = CHECKPOINT_PATH,
+    *,
+    checkpoints: list[dict[str, Any]] | None = None,
+    parse_error: dict[str, Any] | None = None,
+    available: bool | None = None,
+) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+    """
+    Validate checkpoint self-integrity and checkpoint-chain continuity.
+
+    Checkpoint hashes exclude the ``checkpoint_hash`` field itself from the
+    hash domain, mirroring ledger record hashing.
+    """
+    if checkpoints is None:
+        checkpoints, parse_error, parsed_available = _parse_checkpoint_lines(checkpoint_path)
+        available = parsed_available
+
+    report = _base_checkpoint_report(checkpoint_path, available=bool(available))
+
+    if parse_error is not None:
+        return [], _mark_checkpoint_gap(
+            report,
+            str(parse_error["reason"]),
+            index=int(parse_error["index"]),
+        )
+
+    if not checkpoints:
+        return [], report
+
+    expected_previous_hash = GENESIS_HASH
+    seen_hashes: set[str] = set()
+    valid_checkpoints: list[dict[str, Any]] = []
+
+    for line_index, checkpoint in enumerate(checkpoints, start=1):
+        missing = sorted(CHECKPOINT_REQUIRED_FIELDS - checkpoint.keys())
+        if missing:
+            return valid_checkpoints, _mark_checkpoint_gap(
+                report,
+                "MISSING_CHECKPOINT_FIELDS",
+                checkpoint=checkpoint,
+                index=line_index,
+            )
+
+        checkpoint_index = _checkpoint_int(checkpoint.get("checkpoint_index"))
+        record_count = _checkpoint_int(checkpoint.get("record_count"))
+        last_seq = _checkpoint_int(checkpoint.get("last_seq"))
+        version = _checkpoint_int(checkpoint.get("version"))
+        stored_hash = checkpoint.get("checkpoint_hash")
+        previous_hash = checkpoint.get("previous_checkpoint_hash")
+        last_hash = checkpoint.get("last_hash")
+
+        if (
+            version is None
+            or checkpoint_index is None
+            or record_count is None
+            or last_seq is None
+            or not isinstance(checkpoint.get("created_at"), str)
+            or not checkpoint.get("created_at")
+            or not isinstance(checkpoint.get("ledger_file"), str)
+            or not checkpoint.get("ledger_file")
+            or not isinstance(checkpoint.get("verification_status"), str)
+            or not isinstance(checkpoint.get("verification_valid"), bool)
+            or not _is_hash(stored_hash)
+            or not _is_hash(previous_hash)
+            or not _is_hash(last_hash)
+        ):
+            return valid_checkpoints, _mark_checkpoint_gap(
+                report,
+                "INVALID_CHECKPOINT",
+                checkpoint=checkpoint,
+                index=line_index,
+            )
+
+        if previous_hash != expected_previous_hash:
+            return valid_checkpoints, _mark_checkpoint_gap(
+                report,
+                "CHECKPOINT_CHAIN_MISMATCH",
+                checkpoint=checkpoint,
+                index=line_index,
+            )
+
+        if checkpoint_index != line_index:
+            return valid_checkpoints, _mark_checkpoint_gap(
+                report,
+                "CHECKPOINT_INDEX_MISMATCH",
+                checkpoint=checkpoint,
+                index=line_index,
+            )
+
+        expected_hash = _checkpoint_digest(checkpoint)
+
+        if stored_hash != expected_hash:
+            return valid_checkpoints, _mark_checkpoint_gap(
+                report,
+                "CHECKPOINT_SELF_HASH_MISMATCH",
+                checkpoint=checkpoint,
+                index=line_index,
+            )
+
+        if (
+            version != 1
+            or checkpoint_index <= 0
+            or record_count <= 0
+            or last_seq <= 0
+            or last_seq != record_count
+            or checkpoint.get("verification_status") != "VALID"
+            or checkpoint.get("verification_valid") is not True
+        ):
+            return valid_checkpoints, _mark_checkpoint_gap(
+                report,
+                "INVALID_CHECKPOINT",
+                checkpoint=checkpoint,
+                index=line_index,
+            )
+
+        if stored_hash in seen_hashes:
+            return valid_checkpoints, _mark_checkpoint_gap(
+                report,
+                "CHECKPOINT_CHAIN_MISMATCH",
+                checkpoint=checkpoint,
+                index=line_index,
+            )
+
+        seen_hashes.add(stored_hash)
+        valid_checkpoints.append(checkpoint)
+        expected_previous_hash = stored_hash
+
+    latest_checkpoint = valid_checkpoints[-1]
+    _attach_checkpoint_metadata(report, latest_checkpoint)
+    report["checkpoint_state"] = "VALID_CHECKPOINT_CHAIN"
+    return valid_checkpoints, report
 
 
 def save_status(
@@ -102,45 +366,20 @@ def load_ledger_records(
     return records
 
 
-def _load_checkpoints_from_open_file(handle, *, strict: bool = False) -> list[dict[str, Any]]:
-    """Load checkpoint records from an already-open checkpoint file."""
-    handle.seek(0)
-    checkpoints: list[dict[str, Any]] = []
-
-    for index, line in enumerate(handle, start=1):
-        line = line.strip()
-
-        if not line:
-            continue
-
-        try:
-            checkpoint = json.loads(line)
-        except json.JSONDecodeError as exc:
-            if strict:
-                raise ValueError(f"Invalid JSON at checkpoint entry {index}") from exc
-            continue
-
-        if not isinstance(checkpoint, dict):
-            if strict:
-                raise ValueError(f"Checkpoint entry {index} is not a JSON object")
-            continue
-
-        checkpoints.append(checkpoint)
-
-    return checkpoints
-
-
 def load_checkpoints(
     checkpoint_path: Path = CHECKPOINT_PATH,
     *,
     strict: bool = False,
 ) -> list[dict[str, Any]]:
-    """Load local checkpoint records."""
-    if not checkpoint_path.exists():
+    """Load validated local checkpoint records."""
+    checkpoints, report = validate_checkpoint_history(checkpoint_path)
+
+    if report["checkpoint_gap_detected"]:
+        if strict:
+            raise ValueError(str(report["checkpoint_reason"]))
         return []
 
-    with checkpoint_path.open("r", encoding="utf-8") as handle:
-        return _load_checkpoints_from_open_file(handle, strict=strict)
+    return checkpoints
 
 
 def load_latest_checkpoint(
@@ -167,6 +406,9 @@ def assess_checkpoint_continuity(
     records: list[dict[str, Any]],
     checkpoint_path: Path = CHECKPOINT_PATH,
     latest_checkpoint: dict[str, Any] | None = None,
+    checkpoints: list[dict[str, Any]] | None = None,
+    parse_error: dict[str, Any] | None = None,
+    available: bool | None = None,
 ) -> dict[str, Any]:
     """
     Compare current ledger state against the latest local checkpoint.
@@ -175,47 +417,34 @@ def assess_checkpoint_continuity(
     make local truncation and replacement visible before the Raspberry Pi
     anchor exists.
     """
-    if latest_checkpoint is None:
-        latest_checkpoint = load_latest_checkpoint(checkpoint_path)
+    valid_checkpoints, report = validate_checkpoint_history(
+        checkpoint_path,
+        checkpoints=checkpoints,
+        parse_error=parse_error,
+        available=available,
+    )
 
-    report: dict[str, Any] = {
-        "checkpoint_file": str(checkpoint_path),
-        "checkpoint_available": latest_checkpoint is not None,
-        "checkpoint_state": "NO_CHECKPOINT",
-        "checkpoint_gap_detected": False,
-        "checkpoint_reason": None,
-        "checkpoint_index": None,
-        "checkpoint_record_count": 0,
-        "checkpoint_last_hash": None,
-        "checkpoint_hash": None,
-        "checkpoint_created_at": None,
-        "checkpoint_previous_hash": None,
-    }
-
-    if latest_checkpoint is None:
+    if report["checkpoint_gap_detected"]:
         return report
 
+    if latest_checkpoint is not None and checkpoints is None:
+        # Backward-compatible path for callers that already hold a validated
+        # checkpoint object. Normal service calls validate the full history.
+        valid_checkpoints = [latest_checkpoint]
+        report = _base_checkpoint_report(checkpoint_path, available=True)
+        _attach_checkpoint_metadata(report, latest_checkpoint)
+
+    if not valid_checkpoints:
+        return report
+
+    latest_checkpoint = valid_checkpoints[-1]
     checkpoint_count = int(latest_checkpoint.get("record_count") or 0)
     checkpoint_hash = latest_checkpoint.get("last_hash")
     current_count = int(verification.get("record_count") or 0)
-
-    report.update(
-        {
-            "checkpoint_state": "MATCHED",
-            "checkpoint_index": latest_checkpoint.get("checkpoint_index"),
-            "checkpoint_record_count": checkpoint_count,
-            "checkpoint_last_hash": checkpoint_hash,
-            "checkpoint_hash": latest_checkpoint.get("checkpoint_hash"),
-            "checkpoint_created_at": latest_checkpoint.get("created_at"),
-            "checkpoint_previous_hash": latest_checkpoint.get("previous_checkpoint_hash"),
-        }
-    )
+    report["checkpoint_state"] = "MATCHED"
 
     def mark_gap(reason: str) -> dict[str, Any]:
-        report["checkpoint_state"] = reason
-        report["checkpoint_gap_detected"] = True
-        report["checkpoint_reason"] = reason
-        return report
+        return _mark_checkpoint_gap(report, reason, checkpoint=latest_checkpoint)
 
     if checkpoint_count <= 0 or not checkpoint_hash:
         return mark_gap("INVALID_CHECKPOINT")
@@ -313,7 +542,22 @@ def create_checkpoint(
         fcntl.flock(handle.fileno(), fcntl.LOCK_EX)
 
         try:
-            checkpoints = _load_checkpoints_from_open_file(handle)
+            checkpoints, parse_error, available = _parse_checkpoint_lines_from_open_file(handle)
+            valid_checkpoints, checkpoint_report = validate_checkpoint_history(
+                checkpoint_path,
+                checkpoints=checkpoints,
+                parse_error=parse_error,
+                available=available,
+            )
+
+            if checkpoint_report["checkpoint_gap_detected"]:
+                return {
+                    "written": False,
+                    "reason": checkpoint_report["checkpoint_reason"],
+                    "checkpoint_state": checkpoint_report["checkpoint_state"],
+                }
+
+            checkpoints = valid_checkpoints
             latest = checkpoints[-1] if checkpoints else None
 
             if latest is not None:
@@ -321,7 +565,8 @@ def create_checkpoint(
                     verification,
                     records,
                     checkpoint_path=checkpoint_path,
-                    latest_checkpoint=latest,
+                    checkpoints=checkpoints,
+                    available=True,
                 )
 
                 if report["checkpoint_gap_detected"]:
