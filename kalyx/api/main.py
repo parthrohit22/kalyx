@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
+import os
 from pathlib import Path
+import secrets
 from typing import Annotated, Any
 
-from fastapi import FastAPI, HTTPException, Query
+from fastapi import Depends, FastAPI, Header, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
@@ -32,6 +34,8 @@ from kalyx.services import (
 API_DIR = Path(__file__).resolve().parent
 DASHBOARD_PATH = API_DIR / "dashboard.html"
 STATIC_DIR = API_DIR / "static"
+API_KEY_ENV_VAR = "KALYX_API_KEY"
+API_KEY_HEADER = "X-KALYX-API-Key"
 
 app = FastAPI(
     title="KALYX API",
@@ -55,6 +59,29 @@ if STATIC_DIR.exists():
     app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 
 
+def require_api_key(
+    api_key: Annotated[str | None, Header(alias=API_KEY_HEADER)] = None,
+) -> None:
+    """
+    Require a local API key when one is configured.
+
+    KALYX remains local-development friendly: when KALYX_API_KEY is unset,
+    protected operational endpoints are allowed without a header.
+    """
+    configured_key = os.getenv(API_KEY_ENV_VAR)
+
+    if not configured_key:
+        return
+
+    if api_key and secrets.compare_digest(api_key, configured_key):
+        return
+
+    raise HTTPException(
+        status_code=401,
+        detail="Missing or invalid API key",
+    )
+
+
 @app.get("/", response_class=HTMLResponse)
 def dashboard() -> HTMLResponse:
     """
@@ -74,7 +101,11 @@ def dashboard() -> HTMLResponse:
     )
 
 
-@app.post("/ingest", response_model=IngestResponse)
+@app.post(
+    "/ingest",
+    response_model=IngestResponse,
+    dependencies=[Depends(require_api_key)],
+)
 def post_ingest(request: IngestRequest) -> IngestResponse:
     """Ingest a single event through the shared processing pipeline."""
     event: dict[str, Any] | None = None
@@ -107,7 +138,11 @@ def post_ingest(request: IngestRequest) -> IngestResponse:
     )
 
 
-@app.post("/verify", response_model=VerifyResponse)
+@app.post(
+    "/verify",
+    response_model=VerifyResponse,
+    dependencies=[Depends(require_api_key)],
+)
 def post_verify() -> VerifyResponse:
     """Verify the ledger deterministically."""
     result = verify_ledger_state(write_checkpoint=True)
@@ -150,7 +185,11 @@ def get_ledger(
     )
 
 
-@app.post("/detect", response_model=DetectionResponse)
+@app.post(
+    "/detect",
+    response_model=DetectionResponse,
+    dependencies=[Depends(require_api_key)],
+)
 def post_detect() -> DetectionResponse:
     """
     Run deterministic behavioural detection.

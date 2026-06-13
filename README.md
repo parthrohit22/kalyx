@@ -378,16 +378,19 @@ kalyx --help
 ### API
 
 The FastAPI layer exposes shared backend services without introducing separate business logic.
+Operational API key protection is optional for local deployments: when `KALYX_API_KEY`
+is unset, requests behave as before; when it is set, write/operational routes require
+the `X-KALYX-API-Key` header.
 
-| Method | Route | Purpose |
-| --- | --- | --- |
-| `GET` | `/` | Serve a minimal API-running status page |
-| `GET` | `/status` | Return ledger health and verification metadata |
-| `POST` | `/verify` | Run deterministic ledger verification |
-| `POST` | `/ingest` | Ingest one raw or structured execution event |
-| `POST` | `/detect` | Run trusted-ledger-gated behavioural detection |
-| `GET` | `/alerts` | Return persisted alerts |
-| `GET` | `/ledger` | Return recent parsed ledger records for inspection |
+| Method | Route | Protection | Purpose |
+| --- | --- | --- | --- |
+| `GET` | `/` | Unprotected | Serve a minimal API-running status page |
+| `GET` | `/status` | Unprotected | Return ledger health and verification metadata |
+| `POST` | `/verify` | API key when configured | Run deterministic ledger verification |
+| `POST` | `/ingest` | API key when configured | Ingest one raw or structured execution event |
+| `POST` | `/detect` | API key when configured | Run trusted-ledger-gated behavioural detection |
+| `GET` | `/alerts` | Unprotected | Return persisted alerts |
+| `GET` | `/ledger` | Unprotected | Return recent parsed ledger records for inspection |
 
 Example structured ingestion:
 
@@ -407,6 +410,30 @@ curl -X POST http://127.0.0.1:8000/ingest \
   }'
 ```
 
+With API key protection enabled:
+
+```bash
+KALYX_API_KEY=example-dev-key kalyx-api
+
+curl -X POST http://127.0.0.1:8000/ingest \
+  -H 'Content-Type: application/json' \
+  -H 'X-KALYX-API-Key: example-dev-key' \
+  -d '{
+    "event": {
+      "comm": "touch",
+      "pid": 5000,
+      "ppid": 4000,
+      "argv": "touch /tmp/kalyx-api.txt",
+      "ret": 0,
+      "uid": 1000
+    },
+    "source": "api"
+  }'
+```
+
+This is lightweight local API protection, not full user authentication, sessions, or
+role-based access control.
+
 ### Angular Operations Console
 
 The Angular frontend in `frontend/` is the primary local demo interface. It is intentionally thin:
@@ -415,7 +442,7 @@ The Angular frontend in `frontend/` is the primary local demo interface. It is i
 - typed models and `HttpClient` API service
 - reactive forms for ingestion
 - no database
-- no authentication yet
+- no frontend login; optional API key protection is enforced by FastAPI for operational endpoints
 - no frontend-only integrity or detection logic
 
 It calls only the backend API:
