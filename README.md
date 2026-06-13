@@ -15,6 +15,7 @@ KALYX is a backend-focused execution integrity project with a separate Angular o
 - [Suggested Walkthrough](#suggested-walkthrough)
 - [Architecture](#architecture)
 - [Models](#models)
+- [Configuration](#configuration)
 - [Interfaces](#interfaces)
 - [Testing](#testing)
 - [Continuous Integration](#continuous-integration)
@@ -70,9 +71,13 @@ Install the project locally:
 ```bash
 python3 -m venv .venv
 source .venv/bin/activate
-pip install -U pip
-pip install -e .
+python3 -m pip install -U pip
+python3 -m pip install -e . pytest
 ```
+
+Runtime dependencies live in `pyproject.toml`. `requirements.txt` is a convenience
+file for local backend development and test installs; it installs this checkout
+editable plus `pytest`.
 
 Run the validation suite:
 
@@ -133,7 +138,7 @@ Launch the Angular operations console in a separate terminal:
 
 ```bash
 cd frontend
-npm install
+npm ci
 npm start
 ```
 
@@ -328,6 +333,18 @@ Rule-based detection emits explainable persisted alerts:
 }
 ```
 
+## Configuration
+
+KALYX does not require environment variables for the default CLI workflow. API key
+protection is optional for local FastAPI deployments.
+
+| Variable | Required | Purpose | Default when absent | Example |
+| --- | --- | --- | --- | --- |
+| `KALYX_API_KEY` | No | Requires protected API operations to include `X-KALYX-API-Key`. | Protected API routes remain open for local development. | `example-dev-key` |
+
+See [docs/CONFIGURATION.md](docs/CONFIGURATION.md) and [.env.example](.env.example)
+for the central configuration reference. Do not commit real secrets.
+
 ## Request Flow Diagram
 
 ```mermaid
@@ -461,7 +478,7 @@ For local development, Angular runs separately and proxies API calls to FastAPI:
 
 ```bash
 cd frontend
-npm install
+npm ci
 npm start
 ```
 
@@ -502,7 +519,7 @@ run the core project checks without deploying anything.
 
 CI checks:
 
-- backend install with `pip install -e . pytest`
+- backend install with `python3 -m pip install -e . pytest`
 - Python compile check with `python3 -m compileall kalyx`
 - backend tests with `python3 -m pytest -q`
 - frontend install with `npm ci`
