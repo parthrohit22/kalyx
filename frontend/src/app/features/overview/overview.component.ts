@@ -214,7 +214,8 @@ export class OverviewComponent implements OnInit {
     this.api.verifyLedger().subscribe({
       next: (response) => {
         this.state.verification.set(response);
-        this.toast.show(`Verification ${response.status}`, toneForState(response.status) === 'danger' ? 'danger' : 'success');
+        const trustState = this.state.trustDisplayState(response);
+        this.toast.show(`Verification ${trustState}`, toneForState(trustState) === 'danger' ? 'danger' : 'success');
         this.refresh();
       },
       error: (error: Error) => {

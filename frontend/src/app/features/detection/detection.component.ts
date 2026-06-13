@@ -89,7 +89,7 @@ export class DetectionComponent {
       return 'UNKNOWN';
     }
 
-    return this.result.skipped ? 'SKIPPED' : 'VERIFIED';
+    return this.result.skipped ? 'SKIPPED' : this.state.trustDisplayState(this.result.verification);
   }
 
   get panelClass(): string {
