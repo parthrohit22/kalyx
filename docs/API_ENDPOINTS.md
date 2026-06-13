@@ -60,6 +60,8 @@ This is lightweight local API protection. It is not user authentication, session
 OAuth, JWT, or role-based access control.
 
 See `docs/CONFIGURATION.md` for the central environment variable reference.
+The Angular console sends `X-KALYX-API-Key` only when
+`frontend/src/environments/environment.ts` has a non-empty `kalyxApi.apiKey`.
 
 ## Endpoint Summary
 
