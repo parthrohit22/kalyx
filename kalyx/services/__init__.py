@@ -10,12 +10,18 @@ from .ledger import (
     load_ledger_records,
     verify_ledger_state,
 )
-from .pipeline import ingest_execsnoop_file, ingest_live_stream, ingest_payload
+from .pipeline import (
+    LedgerNotTrustedError,
+    ingest_execsnoop_file,
+    ingest_live_stream,
+    ingest_payload,
+)
 
 __all__ = [
     "create_checkpoint",
     "detect_and_persist_alerts",
     "export_ledger_bundle",
+    "LedgerNotTrustedError",
     "get_status_summary",
     "ingest_execsnoop_file",
     "ingest_live_stream",

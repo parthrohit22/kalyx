@@ -10,6 +10,7 @@ from kalyx.core.chain import chain_event
 from kalyx.core.normalize import normalize_event
 from kalyx.engine.enrichment import enrich_event
 from kalyx.engine.parser import parse_execsnoop_line
+from kalyx.services.ledger import CHECKPOINT_PATH, LOG_PATH, verify_ledger_state
 
 
 RAW_SAMPLE_LOG = "sample_exec.log"
@@ -59,6 +60,25 @@ REQUIRED_EVENT_FIELDS = {
     "ppid",
     "argv",
 }
+
+
+class LedgerNotTrustedError(ValueError):
+    """Raised when ingestion is refused because existing evidence is untrusted."""
+
+    def __init__(self, verification: dict[str, Any]) -> None:
+        self.verification = verification
+        status = verification.get("status")
+        trust_state = verification.get("trust_state")
+        reason = verification.get("reason") or verification.get("checkpoint_reason")
+        detail = f"status={status} trust_state={trust_state}"
+
+        if reason:
+            detail = f"{detail} reason={reason}"
+
+        super().__init__(
+            "Ingestion blocked: ledger is not trusted. "
+            f"Resolve or preserve the current trust boundary before appending new evidence ({detail})."
+        )
 
 
 def _coerce_int(value: Any, field: str) -> int:
@@ -156,6 +176,37 @@ def build_record(event: dict[str, Any], source: str) -> dict[str, Any]:
     return validate_event(normalized)
 
 
+def ensure_ingestion_allowed() -> dict[str, Any]:
+    """
+    Verify that the current ledger state can accept new evidence.
+
+    Missing and empty ledgers are allowed only when they do not conflict with a
+    local checkpoint. Any tampered, malformed, checkpoint-inconsistent, or
+    otherwise untrusted state is refused before append.
+    """
+    verification = verify_ledger_state(
+        ledger_path=LOG_PATH,
+        checkpoint_path=CHECKPOINT_PATH,
+    )
+
+    if verification.get("checkpoint_gap_detected"):
+        raise LedgerNotTrustedError(verification)
+
+    if verification.get("status") in {"NO_LEDGER", "EMPTY"}:
+        return verification
+
+    if verification.get("valid") and verification.get("trust_state") == "VERIFIED":
+        return verification
+
+    raise LedgerNotTrustedError(verification)
+
+
+def append_trusted_event(record: dict[str, Any]) -> dict[str, Any]:
+    """Append a normalized event only when the current ledger is trusted."""
+    ensure_ingestion_allowed()
+    return chain_event(record)
+
+
 def ingest_payload(
     *,
     raw_line: str | None = None,
@@ -174,7 +225,7 @@ def ingest_payload(
         raise ValueError("Payload could not be parsed into an event")
 
     record = build_record(parsed_event, source=source)
-    return chain_event(record)
+    return append_trusted_event(record)
 
 
 def parse_sample_line(line: str) -> dict[str, Any] | None:
@@ -265,7 +316,7 @@ def ingest_live_stream() -> dict[str, int]:
                 skipped += 1
                 continue
 
-            chained = chain_event(record)
+            chained = append_trusted_event(record)
             ingested += 1
 
             print(

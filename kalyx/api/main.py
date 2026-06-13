@@ -20,6 +20,7 @@ from kalyx.models import (
     VerifyResponse,
 )
 from kalyx.services import (
+    LedgerNotTrustedError,
     detect_and_persist_alerts,
     get_status_summary,
     ingest_payload,
@@ -87,6 +88,12 @@ def post_ingest(request: IngestRequest) -> IngestResponse:
             event=event,
             source=request.source,
         )
+
+    except LedgerNotTrustedError as exc:
+        raise HTTPException(
+            status_code=409,
+            detail=str(exc),
+        ) from exc
 
     except ValueError as exc:
         raise HTTPException(
