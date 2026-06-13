@@ -136,7 +136,8 @@ export class VerificationComponent implements OnInit {
         this.verification = response;
         this.state.verification.set(response);
         this.loading = false;
-        this.toast.show(`Verification ${response.status}`, toneForState(response.status) === 'danger' ? 'danger' : 'success');
+        const trustState = this.state.trustDisplayState(response);
+        this.toast.show(`Verification ${trustState}`, toneForState(trustState) === 'danger' ? 'danger' : 'success');
         this.state.refreshSummary();
       },
       error: (error: Error) => {

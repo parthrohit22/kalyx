@@ -69,17 +69,40 @@ export class DashboardStateService {
     const valid = this.readBoolean(source, 'valid');
     const verificationValid = this.readBoolean(source, 'verification_valid');
 
+    if (trustState === 'UNTRUSTED') {
+      return 'UNTRUSTED';
+    }
+
+    if (trustState === 'PARTIALLY_TRUSTED') {
+      return 'TAMPERED';
+    }
+
+    if (trustState === 'NO_LEDGER') {
+      return 'NO_LEDGER';
+    }
+
+    if (trustState === 'EMPTY') {
+      return 'EMPTY';
+    }
+
+    if (trustState === 'VERIFIED') {
+      return 'VERIFIED';
+    }
+
+    if (trustState) {
+      return 'UNKNOWN';
+    }
+
     if (
       status === 'VALID' ||
       verificationStatus === 'VALID' ||
-      trustState === 'VERIFIED' ||
       valid === true ||
       verificationValid === true
     ) {
       return 'VERIFIED';
     }
 
-    if (status === 'NO_LEDGER' || verificationStatus === 'NO_LEDGER' || trustState === 'NO_LEDGER') {
+    if (status === 'NO_LEDGER' || verificationStatus === 'NO_LEDGER') {
       return 'NO_LEDGER';
     }
 
@@ -98,13 +121,12 @@ export class DashboardStateService {
 
     if (
       status === 'TAMPERED' ||
-      verificationStatus === 'TAMPERED' ||
-      trustState === 'PARTIALLY_TRUSTED'
+      verificationStatus === 'TAMPERED'
     ) {
       return 'TAMPERED';
     }
 
-    if (valid === false || verificationValid === false || trustState === 'UNTRUSTED') {
+    if (valid === false || verificationValid === false) {
       return 'UNTRUSTED';
     }
 
