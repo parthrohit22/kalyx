@@ -1,7 +1,17 @@
-import { HttpClient, HttpErrorResponse, HttpParams } from '@angular/common/http';
-import { Injectable } from '@angular/core';
+import {
+  HttpClient,
+  HttpErrorResponse,
+  HttpHeaders,
+  HttpParams,
+} from '@angular/common/http';
+import { Inject, Injectable } from '@angular/core';
 import { Observable, catchError, throwError } from 'rxjs';
 
+import {
+  KALYX_API_CONFIG,
+  KALYX_API_KEY_HEADER,
+  KalyxApiConfig,
+} from './kalyx-api.config';
 import { AlertResponse } from '../models/alert.model';
 import { DetectionResponse } from '../models/detection.model';
 import {
@@ -15,21 +25,31 @@ import {
   VerificationResponse,
 } from '../models/verification.model';
 
+interface ApiRequestOptions {
+  headers?: HttpHeaders;
+  params?: HttpParams;
+}
+
 @Injectable({ providedIn: 'root' })
 export class KalyxApiService {
-  private readonly apiBaseUrl = 'http://127.0.0.1:8000';
-
-  constructor(private readonly http: HttpClient) {}
+  constructor(
+    private readonly http: HttpClient,
+    @Inject(KALYX_API_CONFIG) private readonly config: KalyxApiConfig,
+  ) {}
 
   getStatus(): Observable<StatusResponse> {
     return this.http
-      .get<StatusResponse>(`${this.apiBaseUrl}/status`)
+      .get<StatusResponse>(this.apiUrl('/status'), this.requestOptions())
       .pipe(catchError((error) => this.handleError(error, 'GET /status')));
   }
 
   verifyLedger(): Observable<VerificationResponse> {
     return this.http
-      .post<VerificationResponse>(`${this.apiBaseUrl}/verify`, {})
+      .post<VerificationResponse>(
+        this.apiUrl('/verify'),
+        {},
+        this.requestOptions(),
+      )
       .pipe(catchError((error) => this.handleError(error, 'POST /verify')));
   }
 
@@ -37,25 +57,37 @@ export class KalyxApiService {
     payload: StructuredIngestRequest,
   ): Observable<IngestResponse> {
     return this.http
-      .post<IngestResponse>(`${this.apiBaseUrl}/ingest`, payload)
+      .post<IngestResponse>(
+        this.apiUrl('/ingest'),
+        payload,
+        this.requestOptions(),
+      )
       .pipe(catchError((error) => this.handleError(error, 'POST /ingest')));
   }
 
   ingestRawLine(payload: RawLineIngestRequest): Observable<IngestResponse> {
     return this.http
-      .post<IngestResponse>(`${this.apiBaseUrl}/ingest`, payload)
+      .post<IngestResponse>(
+        this.apiUrl('/ingest'),
+        payload,
+        this.requestOptions(),
+      )
       .pipe(catchError((error) => this.handleError(error, 'POST /ingest')));
   }
 
   runDetection(): Observable<DetectionResponse> {
     return this.http
-      .post<DetectionResponse>(`${this.apiBaseUrl}/detect`, {})
+      .post<DetectionResponse>(
+        this.apiUrl('/detect'),
+        {},
+        this.requestOptions(),
+      )
       .pipe(catchError((error) => this.handleError(error, 'POST /detect')));
   }
 
   getAlerts(): Observable<AlertResponse> {
     return this.http
-      .get<AlertResponse>(`${this.apiBaseUrl}/alerts`)
+      .get<AlertResponse>(this.apiUrl('/alerts'), this.requestOptions())
       .pipe(catchError((error) => this.handleError(error, 'GET /alerts')));
   }
 
@@ -64,8 +96,34 @@ export class KalyxApiService {
     const params = new HttpParams().set('limit', String(clamped));
 
     return this.http
-      .get<LedgerResponse>(`${this.apiBaseUrl}/ledger`, { params })
+      .get<LedgerResponse>(
+        this.apiUrl('/ledger'),
+        this.requestOptions({ params }),
+      )
       .pipe(catchError((error) => this.handleError(error, 'GET /ledger')));
+  }
+
+  private apiUrl(path: string): string {
+    const baseUrl = this.config.apiBaseUrl.trim().replace(/\/+$/, '');
+    return `${baseUrl}${path}`;
+  }
+
+  private requestOptions(extra: ApiRequestOptions = {}): ApiRequestOptions {
+    const apiKey = this.config.apiKey?.trim();
+
+    if (!apiKey) {
+      return extra;
+    }
+
+    const headers = (extra.headers ?? new HttpHeaders()).set(
+      KALYX_API_KEY_HEADER,
+      apiKey,
+    );
+
+    return {
+      ...extra,
+      headers,
+    };
   }
 
   private handleError(
@@ -78,6 +136,10 @@ export class KalyxApiService {
   }
 
   private extractErrorMessage(error: HttpErrorResponse): string {
+    if (error.status === 401) {
+      return 'Authentication failed. Check frontend API key configuration.';
+    }
+
     const body = error.error as unknown;
 
     if (typeof body === 'string' && body.trim()) {

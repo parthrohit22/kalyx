@@ -342,6 +342,23 @@ protection is optional for local FastAPI deployments.
 | --- | --- | --- | --- | --- |
 | `KALYX_API_KEY` | No | Requires protected API operations to include `X-KALYX-API-Key`. | Protected API routes remain open for local development. | `example-dev-key` |
 
+The Angular operations console has matching frontend API configuration in
+`frontend/src/environments/environment.ts`:
+
+```ts
+export const environment = {
+  kalyxApi: {
+    apiBaseUrl: 'http://127.0.0.1:8000',
+    apiKey: '',
+  },
+} as const;
+```
+
+When `apiKey` is blank, the frontend sends no API key header. For a protected
+backend deployment, set `apiKey` to the same value as `KALYX_API_KEY` before
+serving or building the frontend. This is local/demo configuration, not secure
+secret storage.
+
 See [docs/CONFIGURATION.md](docs/CONFIGURATION.md) and [.env.example](.env.example)
 for the central configuration reference. Do not commit real secrets.
 
@@ -462,6 +479,10 @@ The Angular frontend in `frontend/` is the primary local demo interface. It is i
 - no database
 - no frontend login; optional API key protection is enforced by FastAPI for operational endpoints
 - no frontend-only integrity or detection logic
+
+Frontend API settings live in `frontend/src/environments/environment.ts`. If the
+backend runs with `KALYX_API_KEY`, configure the same value as `kalyxApi.apiKey`
+so operational calls include `X-KALYX-API-Key`.
 
 It calls only the backend API:
 
