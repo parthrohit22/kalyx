@@ -6,14 +6,14 @@ Run the suite:
 
 ```bash
 python3 -m compileall kalyx
-pytest -q
+python3 -m pytest -q
 ```
 
 The Angular operations console is built separately:
 
 ```bash
 cd frontend
-npm install
+npm ci
 npm run build
 ```
 
@@ -23,6 +23,21 @@ Frontend unit tests can be added with Angular's test runner. If tests are presen
 cd frontend
 npm test
 ```
+
+## Continuous Integration
+
+GitHub Actions runs automated validation on pull requests and pushes to `main`.
+The workflow is intentionally small and only checks the project baseline:
+
+- install backend dependencies from a fresh checkout
+- compile Python sources with `python3 -m compileall kalyx`
+- run backend tests with `python3 -m pytest -q`
+- install frontend dependencies with `npm ci`
+- build the Angular operations console with `npm run build`
+
+The CI workflow does not deploy, publish Docker images, upload coverage, or run
+browser-based Angular/Karma tests. Browser tests are intentionally excluded until
+their Chrome/ChromeHeadless setup is stable enough for CI.
 
 ## Integrity Verification Tests
 

@@ -17,6 +17,7 @@ KALYX is a backend-focused execution integrity project with a separate Angular o
 - [Models](#models)
 - [Interfaces](#interfaces)
 - [Testing](#testing)
+- [Continuous Integration](#continuous-integration)
 - [Security Boundary](#security-boundary)
 - [Tradeoffs](#tradeoffs)
 - [Roadmap](#roadmap)
@@ -77,7 +78,7 @@ Run the validation suite:
 
 ```bash
 python3 -m compileall kalyx
-pytest -q
+python3 -m pytest -q
 ```
 
 Ingest sample execution events:
@@ -482,14 +483,43 @@ Run:
 
 ```bash
 python3 -m compileall kalyx
-pytest -q
+python3 -m pytest -q
 ```
 
 Frontend build:
 
 ```bash
 cd frontend
-npm install
+npm ci
+npm run build
+```
+
+## Continuous Integration
+
+KALYX uses a lightweight GitHub Actions workflow for pull requests and pushes to
+`main`. The workflow validates that a fresh checkout can install dependencies and
+run the core project checks without deploying anything.
+
+CI checks:
+
+- backend install with `pip install -e . pytest`
+- Python compile check with `python3 -m compileall kalyx`
+- backend tests with `python3 -m pytest -q`
+- frontend install with `npm ci`
+- Angular production build with `npm run build`
+
+CI intentionally does not run browser-based Angular/Karma tests yet. The current
+automated frontend gate is the deterministic build check; browser runner setup can
+be added later once it is stable in CI.
+
+Equivalent local checks:
+
+```bash
+python3 -m compileall kalyx
+./.venv/bin/python -m pytest -q
+
+cd frontend
+npm ci
 npm run build
 ```
 
