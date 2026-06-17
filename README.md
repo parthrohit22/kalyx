@@ -35,7 +35,7 @@ KALYX addresses that gap by converting execution events into canonical ledger re
 4. The event is normalized into stable behavioural fields such as `action` and `target`.
 5. The record is appended to a JSONL ledger with a sequence number, previous hash, timestamp, and canonical SHA-256 hash.
 6. Verification recomputes the chain deterministically and reports the first untrusted boundary.
-7. Verified ledger states can be written as local checkpoints that prepare the same evidence format for future external anchoring.
+7. Verified ledger states can be written as local checkpoints that prepare the same evidence format used by the Raspberry Pi anchor prototype.
 
 The result is not prevention and not proof that the original event source was authentic. It is verifiable backend evidence about the records KALYX accepted and chained.
 
@@ -104,6 +104,29 @@ Create or refresh the local checkpoint:
 kalyx checkpoint
 kalyx status
 ```
+
+### External Anchor Verification
+
+Compare the latest local checkpoint with the latest Raspberry Pi anchor:
+
+```bash
+kalyx anchor-status
+```
+
+Optional overrides match `kalyx anchor`:
+
+```bash
+kalyx anchor-status --anchor-url http://<pi>:8081 --ledger-id kalyx-main-host
+```
+
+Statuses are:
+
+- `MATCH`: local checkpoint and Pi anchor have the same checkpoint index and hash.
+- `BEHIND`: the Pi has a newer checkpoint than the local host.
+- `AHEAD`: the local checkpoint is newer than the latest Pi anchor.
+- `DIVERGENCE`: checkpoint indices match, but checkpoint hashes differ.
+- `NO_ANCHOR`: the Pi has no anchor yet for the selected ledger.
+- `UNREACHABLE`: the Pi anchor service could not be contacted.
 
 Tamper with a ledger record and observe deterministic failure:
 
@@ -311,7 +334,7 @@ Local checkpoints are append-only JSONL records that summarize a verified ledger
 }
 ```
 
-This is still local evidence. It improves truncation/replacement detection against the latest checkpoint, and it gives the future Raspberry Pi anchor a stable payload format to receive.
+This is still local evidence. It improves truncation/replacement detection against the latest checkpoint, and it gives the Raspberry Pi anchor prototype a stable payload format to receive.
 
 ### Alert Model
 
@@ -402,6 +425,8 @@ kalyx verify --format json
 kalyx status
 kalyx checkpoint
 kalyx checkpoint --format json
+kalyx anchor
+kalyx anchor-status
 kalyx inspect
 kalyx export
 kalyx audit
@@ -579,7 +604,7 @@ npm run build
 - Ingestion authenticity is outside the current trust boundary.
 - A full host compromise is outside the current guarantees.
 - An attacker who can rewrite the complete ledger, local checkpoints, and all local state may evade local-only verification.
-- External anchoring is not yet implemented.
+- External anchoring is a prototype comparison utility, not a full attestation or recovery system.
 - KALYX does not prevent attacks, block malware, or provide authoritative endpoint protection.
 
 ## Performance Limitations
@@ -658,7 +683,7 @@ sample_exec.log
 
 - **Why JSONL**: it is append-friendly, reviewable, easy to corrupt deliberately in tests, and simple to verify line by line.
 - **Why deterministic rules**: rule output can be explained, reproduced, tested, and deduplicated without hidden model state.
-- **Why local checkpoints**: they provide a simple deletion/truncation warning before external anchoring exists, while using the same evidence shape the Raspberry Pi anchor can later store.
+- **Why local checkpoints**: they provide a simple deletion/truncation warning and use the same evidence shape the Raspberry Pi anchor stores.
 - **Why no database yet**: a database would add operational complexity before the project needs indexed storage.
 - **Why no ML**: the current goal is correctness and explainability, not probabilistic classification.
 - **Why explainability is prioritized**: integrity workflows need clear reasons, record boundaries, and evidence fields more than opaque scores.
@@ -666,7 +691,7 @@ sample_exec.log
 ## Roadmap
 
 - Ledger segmentation
-- Raspberry Pi external anchoring
+- Raspberry Pi anchor hardening
 - Signed checkpoint exchange
 - Incremental verification
 - Authenticated ingestion
