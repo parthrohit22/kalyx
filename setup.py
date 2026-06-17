@@ -13,6 +13,7 @@ setup(
         "console_scripts": [
             "kalyx=kalyx.cli.app:main",
             "kalyx-api=kalyx.api.main:run",
+            "kalyx-anchor=kalyx.anchor.api:run",
         ],
     },
 )
