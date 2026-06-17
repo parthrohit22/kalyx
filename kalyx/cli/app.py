@@ -7,10 +7,11 @@ import os
 import subprocess
 import sys
 from typing import Any
-from urllib import error, request
+from urllib import error
 
 from kalyx.services import (
     LedgerNotTrustedError,
+    compare_anchor_status,
     create_checkpoint,
     detect_and_persist_alerts,
     export_ledger_bundle,
@@ -19,6 +20,7 @@ from kalyx.services import (
     ingest_live_stream,
     load_alerts,
     load_ledger_records,
+    post_anchor_payload as _post_anchor_payload,
     verify_ledger_state,
 )
 
@@ -32,6 +34,7 @@ Usage:
   kalyx status
   kalyx checkpoint [--format json]
   kalyx anchor [--anchor-url URL] [--ledger-id ID]
+  kalyx anchor-status [--anchor-url URL] [--ledger-id ID]
   kalyx inspect
   kalyx export
   kalyx audit
@@ -167,30 +170,6 @@ def _build_anchor_payload(
     }
 
 
-def _post_anchor_payload(
-    payload: dict[str, Any],
-    anchor_url: str,
-) -> dict[str, Any]:
-    """POST a checkpoint boundary to the Raspberry Pi anchor service."""
-    endpoint = anchor_url.rstrip("/") + "/anchor"
-    body = json.dumps(payload, sort_keys=True, separators=(",", ":")).encode("utf-8")
-    anchor_request = request.Request(
-        endpoint,
-        data=body,
-        headers={"Content-Type": "application/json"},
-        method="POST",
-    )
-
-    with request.urlopen(anchor_request, timeout=5) as response:
-        response_body = response.read().decode("utf-8")
-
-    result = json.loads(response_body)
-    if not isinstance(result, dict):
-        raise ValueError("Anchor service returned a non-object response")
-
-    return result
-
-
 def anchor(args: list[str]) -> None:
     """Create or reuse a local checkpoint and send it to the external anchor."""
     anchor_url = _parse_option(
@@ -251,6 +230,46 @@ def anchor(args: list[str]) -> None:
     print(f"Checkpoint hash     : {payload['checkpoint_hash']}")
     print(f"Pi anchor index     : {result.get('anchor_index')}")
     print(f"Pi anchor hash      : {result.get('pi_anchor_hash')}")
+
+
+def print_anchor_status_result(result: dict[str, Any]) -> None:
+    """Render the external anchor comparison result."""
+    status_value = result.get("status")
+    print(f"Anchor Status : {status_value}")
+
+    if status_value == "MATCH":
+        print(f"Checkpoint    : {result.get('local_index')}")
+        return
+
+    if status_value in {"BEHIND", "AHEAD"}:
+        print(f"Local Index   : {result.get('local_index')}")
+        print(f"Pi Index      : {result.get('pi_index')}")
+        return
+
+    if status_value == "DIVERGENCE":
+        print(f"Local Hash    : {result.get('local_hash')}")
+        print(f"Pi Hash       : {result.get('pi_hash')}")
+        return
+
+    if status_value == "UNREACHABLE":
+        print(f"Reason        : {result.get('reason')}")
+
+
+def anchor_status(args: list[str]) -> None:
+    """Compare the latest local checkpoint with the latest external anchor."""
+    anchor_url = _parse_option(
+        args,
+        "--anchor-url",
+        os.getenv("KALYX_ANCHOR_URL", DEFAULT_ANCHOR_URL),
+    )
+    ledger_id = _parse_option(
+        args,
+        "--ledger-id",
+        os.getenv("KALYX_LEDGER_ID", DEFAULT_LEDGER_ID),
+    )
+
+    result = compare_anchor_status(anchor_url=anchor_url, ledger_id=ledger_id)
+    print_anchor_status_result(result)
 
 
 def inspect() -> None:
@@ -543,6 +562,14 @@ def main() -> None:
     if cmd == "anchor":
         try:
             anchor(args[1:])
+        except ValueError as exc:
+            print(f"[ERROR] {exc}")
+            raise SystemExit(2) from exc
+        return
+
+    if cmd == "anchor-status":
+        try:
+            anchor_status(args[1:])
         except ValueError as exc:
             print(f"[ERROR] {exc}")
             raise SystemExit(2) from exc
