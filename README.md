@@ -2,71 +2,325 @@
 
 ![Python](https://img.shields.io/badge/Python-3.10%2B-3776AB?style=flat-square&logo=python&logoColor=white)
 ![FastAPI](https://img.shields.io/badge/API-FastAPI-009688?style=flat-square&logo=fastapi&logoColor=white)
+![Angular](https://img.shields.io/badge/Frontend-Angular-DD0031?style=flat-square&logo=angular&logoColor=white)
 ![Testing](https://img.shields.io/badge/Tests-pytest-0A7F42?style=flat-square)
 ![Ledger](https://img.shields.io/badge/Ledger-Hash--Chained%20JSONL-111827?style=flat-square)
-![Model](https://img.shields.io/badge/Model-Deterministic%20Verification-2563EB?style=flat-square)
 
-**Backend-controlled execution integrity workflow with deterministic verification and tamper-evident ledger semantics.**
+**Execution Evidence Integrity System**
 
-KALYX is a backend-focused execution integrity project with a separate Angular operations console. It is not a commercial SIEM, EDR, malware prevention platform, or authoritative host attestation system. Its purpose is narrower and more inspectable: turn execution events into schema-validated, hash-chained records that can be verified, localized when corrupted, and consumed consistently by a CLI, FastAPI API, and Angular frontend.
+KALYX is an execution evidence integrity system for capturing, verifying, and externally anchoring execution history.
 
-- [Overview](#overview)
-- [Core Capabilities](#core-capabilities)
-- [Suggested Walkthrough](#suggested-walkthrough)
-- [Architecture](#architecture)
-- [Models](#models)
-- [Configuration](#configuration)
-- [Interfaces](#interfaces)
-- [Testing](#testing)
-- [Continuous Integration](#continuous-integration)
-- [Security Boundary](#security-boundary)
-- [Tradeoffs](#tradeoffs)
-- [Roadmap](#roadmap)
+KALYX is not an EDR, SIEM, antivirus, malware blocker, or full host attestation system. It does not prevent attacks. Its purpose is evidence integrity and trust verification.
 
-## Overview
+---
 
-Execution integrity means the recorded history of execution events can be checked after the fact. A normal log may show what was written, but it usually cannot prove whether earlier lines were modified, reordered, truncated, or replaced without additional structure.
+## Problem
 
-KALYX addresses that gap by converting execution events into canonical ledger records:
+Local logs are useful, but they are not automatically trustworthy.
 
-1. Input is accepted as either an execsnoop-style raw line or a structured event.
-2. The event is schema-validated before it is trusted enough to enter the pipeline.
-3. The event is enriched with local process context such as user, TTY, session, and parent process metadata.
-4. The event is normalized into stable behavioural fields such as `action` and `target`.
-5. The record is appended to a JSONL ledger with a sequence number, previous hash, timestamp, and canonical SHA-256 hash.
-6. Verification recomputes the chain deterministically and reports the first untrusted boundary.
-7. Verified ledger states can be written as local checkpoints that prepare the same evidence format used by the Raspberry Pi anchor prototype.
+If an attacker can modify, reorder, truncate, or replace local history, a normal log file may still look plausible. A reviewer may see commands, timestamps, and process names, but not know whether earlier records were changed or deleted.
 
-The result is not prevention and not proof that the original event source was authentic. It is verifiable backend evidence about the records KALYX accepted and chained.
+Evidence integrity matters because investigations depend on continuity:
 
-## Core Capabilities
+- Was this record appended after the previous one?
+- Did a record change after it was written?
+- Was a verified boundary removed or replaced?
+- Is the current ledger trusted enough for detection?
+- Does an independent anchor still agree with the host?
 
-- **Append-only ledger**: execution records are written to `logs/exec_chain.jsonl` as newline-delimited JSON.
-- **Canonical hashing**: hashes are computed from deterministic JSON serialization with sorted keys and compact separators.
-- **Deterministic verification**: the verifier recomputes every record hash and chain link from genesis to the end of the ledger.
-- **Corruption localization**: verification reports `failure_index`, `valid_until_index`, and the last trusted hash.
-- **Schema validation**: ingestion rejects missing fields, invalid process IDs, negative parent process IDs, and empty command names.
-- **Concurrent write safety**: ledger appends hold an exclusive file lock while reading the previous hash, assigning `seq`, hashing, writing, flushing, and syncing.
-- **Local checkpoints**: successful verification can append a checkpoint to `logs/checkpoints.jsonl` with record count, last sequence, last hash, previous checkpoint hash, and checkpoint hash.
-- **Trust-state reporting**: shared status logic maps verification and checkpoint continuity into states such as `VERIFIED`, `UNTRUSTED`, `PARTIALLY_TRUSTED`, `EMPTY`, and `NO_LEDGER`.
-- **Replay-safe detection**: persisted alerts are deduplicated with stable signatures and file-lock protected alert writes.
-- **CLI, API, and Angular console**: all interfaces call shared services instead of duplicating integrity logic.
-- **Explainable alerts**: detection rules return deterministic alert objects with type, severity, target, sequence range, timestamps, and details.
+KALYX addresses that problem by turning execution events into verifiable, hash-chained evidence.
 
-## Why This Project Matters
+---
 
-Security tooling often starts with visibility: collect events, search them, and display them. KALYX focuses on the next question: whether the recorded history can still be trusted.
+## What KALYX Does
 
-That distinction matters for:
+| Capability | Description |
+|---|---|
+| Execution ingestion | Accepts sample log events, raw execsnoop-style lines, structured API events, and live eBPF execsnoop output |
+| Processing pipeline | Validates, enriches, normalizes, and chains events through shared backend services |
+| Hash-chained ledger | Stores execution records in `logs/exec_chain.jsonl` with sequence number, previous hash, and canonical record hash |
+| Verification engine | Recomputes the ledger chain and reports the first untrusted boundary |
+| Local checkpoints | Stores verified ledger boundaries in `logs/checkpoints.jsonl` using chained checkpoint hashes |
+| Trust-state enforcement | Blocks new ingestion when the ledger or checkpoint state is untrusted |
+| Detection engine | Runs deterministic behavioral rules only after successful verification |
+| Alert persistence | Stores deduplicated alerts in `logs/alerts.jsonl` |
+| FastAPI host backend | Exposes status, ingestion, verification, detection, alerts, and ledger inspection |
+| Angular dashboard | Provides a local operations console over the FastAPI backend |
+| Raspberry Pi anchor authority | Stores checkpoint boundaries in an independent Pi-side hash chain |
+| Anchor comparison | Compares the latest local checkpoint with the latest Raspberry Pi anchor |
 
-- **Trust vs visibility**: seeing a log line is different from verifying that the chain of evidence has not changed.
-- **Verifiable evidence**: canonical hashes and previous-hash links make record modification detectable.
-- **Backend correctness**: integrity guarantees live in reusable services, not in the CLI or dashboard.
-- **Operational auditability**: verification returns structured data that can be inspected, exported, and tested.
+---
 
-## Suggested Walkthrough
+## System Architecture
 
-Install the project locally:
+KALYX has three layers:
+
+1. **Interfaces**: CLI, FastAPI host API, and Angular dashboard access the system.
+2. **Host evidence core**: ingestion, validation, normalization, ledger chaining, verification, checkpoints, detection, alerts, and anchor submission.
+3. **External anchor authority**: a Raspberry Pi service stores checkpoint boundaries in an independent anchor chain.
+
+The interfaces are access layers. They do not implement separate integrity logic; they call the shared host evidence core.
+
+```mermaid
+flowchart TD
+    subgraph Interfaces["Interfaces"]
+        CLI["CLI<br/>kalyx"]
+        API["FastAPI Host API<br/>kalyx-api"]
+        UI["Angular Dashboard<br/>frontend"]
+    end
+
+    subgraph Host["Host Evidence Core"]
+        Ingest["Ingestion + Normalization"]
+        TrustGate["Trust Gate"]
+        Ledger["Hash-Chained Ledger"]
+        Verify["Verification Engine"]
+        Checkpoints["Checkpoint Chain"]
+        Detect["Detection Engine"]
+        Alerts["Alert Log"]
+        AnchorClient["Anchor Client"]
+    end
+
+    subgraph Pi["Raspberry Pi Anchor Authority"]
+        AnchorAPI["Anchor API<br/>kalyx-anchor"]
+        AnchorChain["Pi Anchor Chain"]
+    end
+
+    UI --> API
+
+    CLI --> Ingest
+    API --> Ingest
+    CLI --> Verify
+    API --> Verify
+    CLI --> Detect
+    API --> Detect
+    CLI --> AnchorClient
+
+    Ingest --> TrustGate
+    TrustGate --> Ledger
+    Verify --> Ledger
+    Verify --> Checkpoints
+    Ledger --> Detect
+    Detect --> Alerts
+    AnchorClient --> Checkpoints
+    AnchorClient --> AnchorAPI
+    AnchorAPI --> AnchorChain
+    AnchorAPI -. latest anchor .-> AnchorClient
+```
+
+| Layer | Component | Implementation | Responsibility |
+|---|---|---|---|
+| Interfaces | CLI | `kalyx/cli/app.py` | Operational commands for ingestion, verification, checkpoints, detection, alerts, and anchoring |
+| Interfaces | FastAPI Host API | `kalyx/api/main.py` | HTTP access to shared host services |
+| Interfaces | Angular Dashboard | `frontend/` | Local interface for trust state, ledger inspection, verification, ingestion, detection, alerts, and evidence JSON |
+| Host Evidence Core | Pipeline | `kalyx/services/pipeline.py` | Validation, enrichment, normalization, and trust-gated append |
+| Host Evidence Core | Ledger Service | `kalyx/services/ledger.py` | Ledger verification, checkpoints, trust states, status, and export |
+| Host Evidence Core | Detection Service | `kalyx/services/detection.py` | Verification-gated detection and alert persistence |
+| Host Evidence Core | Anchor Client | `kalyx/services/anchor_client.py` | Checkpoint submission and anchor-status comparison |
+| External Anchor Authority | Raspberry Pi Anchor API | `kalyx/anchor/api.py` | Independent API for checkpoint anchoring and latest-anchor lookup |
+| External Anchor Authority | Raspberry Pi Anchor Storage | `kalyx/anchor/storage.py` | Pi-side append-only anchor chain validation and persistence |
+
+---
+
+## End-To-End Workflow
+
+```mermaid
+flowchart LR
+    A["Capture event"] --> B["Validate<br/>Enrich<br/>Normalize"]
+    B --> C["Trust gate"]
+    C --> D["Append to<br/>hash-chained ledger"]
+    D --> E["Verify ledger"]
+    E --> F["Create checkpoint"]
+    F --> G["Anchor checkpoint<br/>to Raspberry Pi"]
+    G --> H["Compare anchor status"]
+    E --> I["Run detection<br/>only if trusted"]
+    I --> J["Persist alerts"]
+```
+
+- **Capture**: events enter through sample logs, raw execsnoop-style lines, structured API requests, or live eBPF ingestion.
+- **Chain**: accepted events are validated, enriched, normalized, and appended to the hash-chained ledger after the trust gate passes.
+- **Verify**: the verification engine recomputes ledger hashes and reports the first untrusted boundary.
+- **Checkpoint**: trusted ledger boundaries are recorded in the local checkpoint chain.
+- **Anchor**: checkpoint boundaries can be submitted to the Raspberry Pi authority and compared with the latest external anchor.
+- **Detect**: deterministic rules run only on trusted evidence and persist deduplicated alerts.
+
+---
+
+## Trust Model
+
+KALYX verifies evidence continuity. It does not prove event truth.
+
+### What KALYX Can Verify
+
+| Claim | How |
+|---|---|
+| A ledger record was changed after append | Recompute canonical record hash |
+| A previous-hash link was broken | Compare each `prev_hash` with expected previous record hash |
+| Ledger JSON is malformed | Decode and validate each ledger line |
+| The first untrusted record boundary | Report `failure_index`, `valid_until_index`, and `last_valid_hash` |
+| A local checkpoint was edited | Validate checkpoint self-hash |
+| Checkpoint history was reordered or broken | Validate previous-checkpoint hash chain |
+| Ledger fell behind a previous checkpoint | Compare current ledger against latest checkpoint boundary |
+| Detection ran only on trusted evidence | Detection service verifies before replaying records |
+| A checkpoint was externally anchored | Compare local checkpoint with latest Raspberry Pi anchor |
+
+### What KALYX Cannot Verify
+
+| Out Of Scope | Reason |
+|---|---|
+| Event source authenticity | KALYX validates event shape, not event truth |
+| Kernel-level trust | Raw execsnoop lines are treated as input, not proof |
+| Full host compromise resistance | A fully compromised host can alter local runtime and files |
+| Malware prevention | KALYX records and verifies evidence; it does not block processes |
+| Complete remote attestation | Raspberry Pi anchoring stores checkpoint boundaries, not full host state |
+| Continuous anchor availability | Anchor comparison depends on the Pi service being reachable |
+
+Core boundary:
+
+```text
+KALYX verifies records it accepted.
+KALYX does not prove the original event source was truthful.
+```
+
+---
+
+## Trust States
+
+| Trust State | Meaning |
+|---|---|
+| `VERIFIED` | Ledger verifies successfully and does not conflict with the latest local checkpoint |
+| `PARTIALLY_TRUSTED` | Verification failed, but earlier records before the failure remain trusted |
+| `UNTRUSTED` | Ledger or checkpoint continuity cannot be trusted |
+| `EMPTY` | Ledger file exists but contains no records |
+| `NO_LEDGER` | No ledger file exists yet |
+
+Ingestion is blocked when the current ledger or checkpoint state is untrusted. Detection is skipped when verification fails.
+
+---
+
+## External Anchor Workflow
+
+KALYX includes an independent Raspberry Pi anchor authority.
+
+The host creates local checkpoints. The Pi stores checkpoint boundaries in its own append-only hash chain. This gives the host a separate authority to compare against after local changes, truncation, or replacement.
+
+### Start The Anchor Service
+
+On the Raspberry Pi, or locally for testing:
+
+```bash
+kalyx-anchor
+```
+
+Default service port:
+
+```text
+http://127.0.0.1:8081
+```
+
+The Pi anchor stores records in:
+
+```text
+anchors/anchor_chain.jsonl
+```
+
+### Submit A Checkpoint
+
+Create local evidence and a checkpoint:
+
+```bash
+kalyx ingest
+kalyx verify --format json
+kalyx checkpoint
+```
+
+Submit the latest checkpoint to the anchor service:
+
+```bash
+kalyx anchor --anchor-url http://127.0.0.1:8081 --ledger-id kalyx-main-host
+```
+
+`kalyx anchor` verifies the ledger, creates or reuses a safe local checkpoint, then sends the checkpoint boundary to the Pi service.
+
+Anchor submission statuses include:
+
+| Status | Meaning |
+|---|---|
+| `ACCEPTED` | New checkpoint boundary was stored |
+| `ALREADY_ANCHORED` | Same ledger/checkpoint hash was already stored |
+| `REJECTED_STALE` | Checkpoint index is older than the latest Pi anchor for that ledger |
+| `REJECTED_INVALID` | Payload or existing Pi anchor chain failed validation |
+
+### Compare Local And Pi State
+
+```bash
+kalyx anchor-status --anchor-url http://127.0.0.1:8081 --ledger-id kalyx-main-host
+```
+
+Comparison statuses:
+
+| Status | Meaning |
+|---|---|
+| `MATCH` | Local checkpoint and Pi anchor have the same checkpoint index and hash |
+| `BEHIND` | Pi anchor is newer than the local checkpoint |
+| `AHEAD` | Local checkpoint is newer than the latest Pi anchor |
+| `DIVERGENCE` | Checkpoint indices match, but checkpoint hashes differ |
+| `NO_ANCHOR` | No Pi anchor exists for the selected ledger |
+| `UNREACHABLE` | Pi anchor service could not be contacted |
+
+Environment defaults:
+
+```bash
+export KALYX_ANCHOR_URL=http://127.0.0.1:8081
+export KALYX_LEDGER_ID=kalyx-main-host
+```
+
+---
+
+## Dashboard
+
+The Angular dashboard is a local operations console over the FastAPI host API. It does not decide trust in the browser. It displays backend verification, ledger, checkpoint, detection, and alert state.
+
+| Screen | Purpose |
+|---|---|
+| Overview | Current trust state, ledger state, checkpoint state, recent records, recent alerts |
+| Ledger | Searchable/filterable ledger records with full JSON drawer |
+| Verification | Run backend verification and inspect trust metadata |
+| Ingestion | Submit structured events or raw execsnoop-style lines |
+| Detection | Run verification-gated detection |
+| Alerts | Search and filter persisted alerts |
+| Evidence | Inspect raw backend JSON responses |
+
+Run locally:
+
+```bash
+cd frontend
+npm ci
+npm start
+```
+
+Open:
+
+```text
+http://127.0.0.1:4200/
+```
+
+Default frontend API target:
+
+```text
+http://127.0.0.1:8000
+```
+
+Configured in:
+
+```text
+frontend/src/environments/environment.ts
+```
+
+---
+
+## Quick Start
+
+Install from a local checkout:
 
 ```bash
 python3 -m venv .venv
@@ -75,89 +329,35 @@ python3 -m pip install -U pip
 python3 -m pip install -e . pytest
 ```
 
-Runtime dependencies live in `pyproject.toml`. `requirements.txt` is a convenience
-file for local backend development and test installs; it installs this checkout
-editable plus `pytest`.
-
-Run the validation suite:
+Run backend checks:
 
 ```bash
 python3 -m compileall kalyx
 python3 -m pytest -q
 ```
 
-Ingest sample execution events:
+Create and verify a sample ledger:
 
 ```bash
 kalyx ingest
-```
-
-Verify the ledger:
-
-```bash
 kalyx verify --format json
-```
-
-Create or refresh the local checkpoint:
-
-```bash
-kalyx checkpoint
 kalyx status
 ```
 
-### External Anchor Verification
-
-Compare the latest local checkpoint with the latest Raspberry Pi anchor:
-
-```bash
-kalyx anchor-status
-```
-
-Optional overrides match `kalyx anchor`:
-
-```bash
-kalyx anchor-status --anchor-url http://<pi>:8081 --ledger-id kalyx-main-host
-```
-
-Statuses are:
-
-- `MATCH`: local checkpoint and Pi anchor have the same checkpoint index and hash.
-- `BEHIND`: the Pi has a newer checkpoint than the local host.
-- `AHEAD`: the local checkpoint is newer than the latest Pi anchor.
-- `DIVERGENCE`: checkpoint indices match, but checkpoint hashes differ.
-- `NO_ANCHOR`: the Pi has no anchor yet for the selected ledger.
-- `UNREACHABLE`: the Pi anchor service could not be contacted.
-
-Tamper with a ledger record and observe deterministic failure:
-
-```bash
-cp logs/exec_chain.jsonl /tmp/kalyx-ledger.backup
-python3 - <<'PY'
-from pathlib import Path
-
-path = Path("logs/exec_chain.jsonl")
-lines = path.read_text(encoding="utf-8").splitlines()
-lines[0] = lines[0].replace("touch", "rm", 1)
-path.write_text("\n".join(lines) + "\n", encoding="utf-8")
-PY
-kalyx verify --format json
-mv /tmp/kalyx-ledger.backup logs/exec_chain.jsonl
-```
-
-Run deterministic detection and inspect persisted alerts:
+Run detection:
 
 ```bash
 kalyx detect
 kalyx alerts
 ```
 
-Launch the FastAPI backend:
+Start the host API:
 
 ```bash
 kalyx-api
 ```
 
-Launch the Angular operations console in a separate terminal:
+Start the dashboard:
 
 ```bash
 cd frontend
@@ -165,382 +365,114 @@ npm ci
 npm start
 ```
 
-Then open the Angular frontend:
+---
 
-```text
-http://127.0.0.1:4200/
-```
+## CLI Reference
 
-From the browser console you can run the normal local demo flow: refresh status, verify the ledger, ingest structured or raw events, inspect recent ledger records, run deterministic detection, and review persisted alerts. The Angular frontend is only a presentation layer over the same FastAPI services used by the CLI. It does not decide whether evidence is trusted.
+| Command | Purpose |
+|---|---|
+| `kalyx ingest` | Ingest sample events from `sample_exec.log` |
+| `kalyx ingest-live` | Run live eBPF ingestion using `execsnoop-bpfcc` |
+| `kalyx verify` | Verify ledger and write/reuse a checkpoint when safe |
+| `kalyx verify --format json` | Print structured verification output |
+| `kalyx status` | Show ledger, verification, trust, and checkpoint status |
+| `kalyx checkpoint` | Create or reuse a local checkpoint |
+| `kalyx checkpoint --format json` | Print checkpoint operation as JSON |
+| `kalyx anchor` | Submit latest local checkpoint to the anchor service |
+| `kalyx anchor-status` | Compare local checkpoint with latest Pi anchor |
+| `kalyx inspect` | Print ledger entries in readable form |
+| `kalyx export` | Export ledger records and verification state |
+| `kalyx audit` | Display auditd ledger access events for `kalyx_ledger_watch` |
+| `kalyx detect` | Run deterministic detection against trusted ledger evidence |
+| `kalyx alerts` | Print persisted alerts |
+| `kalyx --help` | Show command help |
 
-## Engineering Challenges
+---
 
-KALYX is intentionally small, but it exercises several backend problems that matter in integrity systems:
+## API Summary
 
-- **Concurrent append races**: multiple writers must not read the same previous hash and create conflicting chain links.
-- **Malformed input rejection**: bad evidence should fail before it becomes hash-protected ledger state.
-- **Corruption boundaries**: verification must identify the first untrusted record and preserve the last trusted hash.
-- **Checkpoint continuity**: a locally valid ledger can still be suspicious if it falls behind the latest checkpoint.
-- **Deterministic behaviour**: hashing, verification, sorting, and detection must produce repeatable results.
-- **Replay-safe detection**: repeated detection runs and concurrent alert writes should not duplicate the same alert.
-- **Thin interfaces**: CLI, API, and Angular console should expose shared backend behaviour without reimplementing it.
-- **Honest trust boundaries**: local verification cannot claim source authenticity or survival after full host compromise.
+KALYX has two FastAPI applications: the host API and the anchor API.
 
-## Architecture
+### Host API
 
-KALYX is organized as layered backend services with thin interface adapters.
-
-```mermaid
-flowchart TD
-    Sources["Event Sources<br/>execsnoop lines<br/>structured payloads<br/>sample_exec.log"]
-
-    CLI["CLI<br/>kalyx"]
-    API["FastAPI API<br/>/status /verify /ingest<br/>/detect /alerts /ledger"]
-    Frontend["Angular Frontend<br/>operations console"]
-
-    Pipeline["Pipeline Service<br/>parse -> enrich -> normalize -> chain"]
-    LedgerService["Ledger Service<br/>verify -> status -> export"]
-    DetectionService["Detection Service<br/>trusted replay -> rules -> alerts"]
-
-    Core["Core Primitives<br/>canonical hashing<br/>chain verification<br/>normalization and rules"]
-    Engine["Engine<br/>parser / enrichment<br/>execsnoop helpers"]
-    Models["Models<br/>models/schema.py<br/>Pydantic contracts"]
-
-    Ledger[("logs/exec_chain.jsonl")]
-    Alerts[("logs/alerts.jsonl")]
-    Checkpoints[("logs/checkpoints.jsonl")]
-
-    Sources --> CLI
-    Sources --> API
-    CLI --> Pipeline
-    API --> Pipeline
-    Frontend --> API
-
-    Pipeline --> Engine
-    Pipeline --> Models
-    Pipeline --> Core
-    Pipeline --> Ledger
-
-    API --> LedgerService
-    CLI --> LedgerService
-    LedgerService --> Core
-    LedgerService --> Ledger
-    LedgerService --> Checkpoints
-
-    CLI --> DetectionService
-    DetectionService --> LedgerService
-    DetectionService --> Core
-    DetectionService --> Alerts
-```
-
-### Layered Responsibilities
-
-- `kalyx/core`: deterministic primitives for chaining, verification rendering, normalization, alert signatures, and detection rules.
-- `kalyx/engine`: input parsing and local process enrichment.
-- `kalyx/services`: shared backend workflows used by every interface.
-- `kalyx/models/schema.py`: Pydantic API request and response models.
-- `kalyx/cli`: command-line adapter.
-- `kalyx/api`: FastAPI adapter exposing backend endpoints and a minimal API status page.
-- `frontend`: Angular operations console that calls FastAPI through the local dev proxy.
-
-### Request Flow
-
-For ingestion, interfaces call the same shared pipeline:
-
-```text
-request/event
-  -> schema or pipeline validation
-  -> parse raw line when needed
-  -> enrich local context
-  -> normalize action and target
-  -> acquire ledger lock
-  -> read previous valid hash
-  -> assign sequence number
-  -> compute canonical hash
-  -> append JSONL record
-```
-
-For verification, the ledger service reads ledger lines in order and stops at the first invalid JSON record, invalid record type, previous-hash mismatch, or record-hash mismatch. That record and everything after it are treated as untrusted.
-
-For checkpoint continuity, the ledger service compares the current ledger against the latest local checkpoint. If the current ledger has fewer records than the checkpoint or no longer contains the checkpointed hash at the checkpointed position, status reports a checkpoint gap and downgrades `trust_state` to `UNTRUSTED`.
-
-## Models
-
-### Execution Record Model
-
-The ledger stores canonical JSONL records. A realistic record looks like:
-
-```json
-{
-  "action": "CREATE",
-  "argv": "touch /tmp/kalyx-demo.txt",
-  "comm": "touch",
-  "hash": "dfc8c2d1b1a2e3a7b6c4d8f91234567890abcdef1234567890abcdef12345678",
-  "parent_comm": "bash",
-  "parent_exe": "/usr/bin/bash",
-  "pid": 41277,
-  "ppid": 41010,
-  "prev_hash": "0000000000000000000000000000000000000000000000000000000000000000",
-  "ret": 0,
-  "seq": 1,
-  "session": "interactive_terminal",
-  "source": "api",
-  "target": "/tmp/kalyx-demo.txt",
-  "ts": "2026-05-20T14:12:30.142381+00:00",
-  "tty": "/dev/pts/2",
-  "uid": 1000,
-  "user": "parth"
-}
-```
-
-### Verification Result Model
-
-Verification returns structured evidence, not only a boolean:
-
-```json
-{
-  "actual_hash": "7f5a1234...",
-  "expected_hash": "bc931234...",
-  "failure_index": 3,
-  "last_valid_hash": "2aa8b73c...",
-  "record_count": 5,
-  "reason": "HASH_MISMATCH",
-  "status": "TAMPERED",
-  "trust_state": "PARTIALLY_TRUSTED",
-  "valid": false,
-  "valid_until_index": 2
-}
-```
-
-Possible statuses include `VALID`, `TAMPERED`, `EMPTY`, and `NO_LEDGER`.
-
-### Checkpoint Model
-
-Local checkpoints are append-only JSONL records that summarize a verified ledger boundary:
-
-```json
-{
-  "checkpoint_hash": "67f1c6e1...",
-  "checkpoint_index": 2,
-  "created_at": "2026-05-20T14:30:00.021000+00:00",
-  "last_hash": "2aa8b73c...",
-  "last_seq": 128,
-  "ledger_file": "logs/exec_chain.jsonl",
-  "previous_checkpoint_hash": "91a4c2d0...",
-  "record_count": 128,
-  "verification_status": "VALID",
-  "verification_valid": true,
-  "version": 1
-}
-```
-
-This is still local evidence. It improves truncation/replacement detection against the latest checkpoint, and it gives the Raspberry Pi anchor prototype a stable payload format to receive.
-
-### Alert Model
-
-Rule-based detection emits explainable persisted alerts:
-
-```json
-{
-  "delta_seconds": 2.0,
-  "details": "DELETE followed by CREATE within 300s",
-  "seq_end": 12,
-  "seq_start": 11,
-  "session": "interactive_terminal",
-  "severity": "HIGH",
-  "target": "/tmp/kalyx-demo.txt",
-  "ts_end": "2026-05-20T14:19:04.020000+00:00",
-  "ts_start": "2026-05-20T14:19:02.020000+00:00",
-  "type": "DELETE_CREATE",
-  "user": "parth"
-}
-```
-
-## Configuration
-
-KALYX does not require environment variables for the default CLI workflow. API key
-protection is optional for local FastAPI deployments.
-
-| Variable | Required | Purpose | Default when absent | Example |
-| --- | --- | --- | --- | --- |
-| `KALYX_API_KEY` | No | Requires protected API operations to include `X-KALYX-API-Key`. | Protected API routes remain open for local development. | `example-dev-key` |
-
-The Angular operations console has matching frontend API configuration in
-`frontend/src/environments/environment.ts`:
-
-```ts
-export const environment = {
-  kalyxApi: {
-    apiBaseUrl: 'http://127.0.0.1:8000',
-    apiKey: '',
-  },
-} as const;
-```
-
-When `apiKey` is blank, the frontend sends no API key header. For a protected
-backend deployment, set `apiKey` to the same value as `KALYX_API_KEY` before
-serving or building the frontend. This is local/demo configuration, not secure
-secret storage.
-
-See [docs/CONFIGURATION.md](docs/CONFIGURATION.md) and [.env.example](.env.example)
-for the central configuration reference. Do not commit real secrets.
-
-## Request Flow Diagram
-
-```mermaid
-sequenceDiagram
-    participant User
-    participant Interface as CLI/API/Angular
-    participant Pipeline as Pipeline Service
-    participant Ledger as Ledger Service
-    participant Detector as Detection Service
-    participant Alerts as Alert Log
-
-    User->>Interface: Submit event or command
-    Interface->>Pipeline: ingest_payload()
-    Pipeline->>Pipeline: validate, parse, enrich, normalize
-    Pipeline->>Ledger: chain_event()
-    Ledger->>Ledger: lock, link, hash, append, fsync
-    Ledger-->>Interface: Chained record
-    User->>Interface: Verify or detect
-    Interface->>Ledger: verify_ledger_state()
-    Ledger-->>Interface: Structured verification result
-    Interface->>Detector: detect_and_persist_alerts()
-    Detector->>Ledger: Verify before detection
-    Detector->>Alerts: Persist deduplicated alerts
-    Alerts-->>Interface: Alert summary
-```
-
-## Interfaces
-
-### CLI
-
-The CLI is the most complete operational interface:
+Start:
 
 ```bash
-kalyx ingest
-kalyx ingest-live
-kalyx verify
-kalyx verify --format json
-kalyx status
-kalyx checkpoint
-kalyx checkpoint --format json
-kalyx anchor
-kalyx anchor-status
-kalyx inspect
-kalyx export
-kalyx audit
-kalyx detect
-kalyx alerts
-kalyx --help
+kalyx-api
 ```
 
-### API
+Base URL:
 
-The FastAPI layer exposes shared backend services without introducing separate business logic.
-Operational API key protection is optional for local deployments: when `KALYX_API_KEY`
-is unset, requests behave as before; when it is set, write/operational routes require
-the `X-KALYX-API-Key` header.
+```text
+http://127.0.0.1:8000
+```
 
 | Method | Route | Protection | Purpose |
-| --- | --- | --- | --- |
-| `GET` | `/` | Unprotected | Serve a minimal API-running status page |
-| `GET` | `/status` | Unprotected | Return ledger health and verification metadata |
-| `POST` | `/verify` | API key when configured | Run deterministic ledger verification |
-| `POST` | `/ingest` | API key when configured | Ingest one raw or structured execution event |
-| `POST` | `/detect` | API key when configured | Run trusted-ledger-gated behavioural detection |
-| `GET` | `/alerts` | Unprotected | Return persisted alerts |
-| `GET` | `/ledger` | Unprotected | Return recent parsed ledger records for inspection |
+|---|---|---|---|
+| `GET` | `/` | Open | Minimal API-running page |
+| `GET` | `/status` | Open | Ledger status, trust state, checkpoint metadata |
+| `POST` | `/verify` | API key when configured | Verify ledger and write/reuse checkpoint when safe |
+| `POST` | `/ingest` | API key when configured | Ingest raw line or structured event |
+| `POST` | `/detect` | API key when configured | Run verification-gated detection |
+| `GET` | `/alerts` | Open | Return persisted alerts |
+| `GET` | `/ledger` | Open | Return recent parsed ledger records |
 
-Example structured ingestion:
-
-```bash
-curl -X POST http://127.0.0.1:8000/ingest \
-  -H 'Content-Type: application/json' \
-  -d '{
-    "event": {
-      "comm": "touch",
-      "pid": 5000,
-      "ppid": 4000,
-      "argv": "touch /tmp/kalyx-api.txt",
-      "ret": 0,
-      "uid": 1000
-    },
-    "source": "api"
-  }'
-```
-
-With API key protection enabled:
+Optional local API-key protection:
 
 ```bash
-KALYX_API_KEY=example-dev-key kalyx-api
-
-curl -X POST http://127.0.0.1:8000/ingest \
-  -H 'Content-Type: application/json' \
-  -H 'X-KALYX-API-Key: example-dev-key' \
-  -d '{
-    "event": {
-      "comm": "touch",
-      "pid": 5000,
-      "ppid": 4000,
-      "argv": "touch /tmp/kalyx-api.txt",
-      "ret": 0,
-      "uid": 1000
-    },
-    "source": "api"
-  }'
+export KALYX_API_KEY=example-dev-key
+kalyx-api
 ```
 
-This is lightweight local API protection, not full user authentication, sessions, or
-role-based access control.
+Protected host routes then require:
 
-### Angular Operations Console
+```text
+X-KALYX-API-Key: example-dev-key
+```
 
-The Angular frontend in `frontend/` is the primary local demo interface. It is intentionally thin:
+This is lightweight local protection for operational routes. It is not user authentication, RBAC, OAuth, JWT, or source attestation.
 
-- Angular standalone components and router
-- typed models and `HttpClient` API service
-- reactive forms for ingestion
-- no database
-- no frontend login; optional API key protection is enforced by FastAPI for operational endpoints
-- no frontend-only integrity or detection logic
+### Anchor API
 
-Frontend API settings live in `frontend/src/environments/environment.ts`. If the
-backend runs with `KALYX_API_KEY`, configure the same value as `kalyxApi.apiKey`
-so operational calls include `X-KALYX-API-Key`.
-
-It calls only the backend API:
-
-- `GET /status`
-- `POST /verify`
-- `POST /ingest`
-- `POST /detect`
-- `GET /alerts`
-- `GET /ledger`
-
-`GET /ledger` is for inspection only. Trust decisions still come from verification and status responses.
-
-For local development, Angular runs separately and proxies API calls to FastAPI:
+Start:
 
 ```bash
-cd frontend
-npm ci
-npm start
+kalyx-anchor
 ```
 
-## Testing
+Base URL:
 
-Tests are part of the engineering story because KALYX is built around correctness claims. The suite checks behaviour that would be easy to break with casual refactoring:
+```text
+http://127.0.0.1:8081
+```
 
-- **Integrity verification tests** prove valid chained records verify successfully.
-- **Tamper detection tests** prove payload edits produce `HASH_MISMATCH`.
-- **Corruption tests** prove invalid JSON, mid-ledger corruption, hash corruption, and previous-hash corruption report the correct boundary.
-- **Concurrent append tests** prove file-lock protected writes preserve sequence and chain consistency under parallel writers.
-- **Malformed input tests** prove incomplete events, invalid PIDs, and blank commands are rejected before append.
-- **Checkpoint tests** prove verified ledgers can create checkpoints, duplicate checkpoints are suppressed, truncation behind a checkpoint is reported, and trust state is downgraded.
-- **Detection rule tests** prove deterministic alerts for delete/create replacement, modify bursts, destructive bursts, and scripted destructive actions.
-- **Alert deduplication tests** prove duplicate and concurrent alert writes persist only one copy of the same stable alert signature.
-- **API route tests** prove status, ingest, verify, detect, ledger, and alerts route handlers preserve shared backend behaviour.
+| Method | Route | Purpose |
+|---|---|---|
+| `POST` | `/anchor` | Store a checkpoint boundary in the Pi anchor chain |
+| `GET` | `/anchor/latest?ledger_id=...` | Return the latest anchor accepted for one ledger |
+
+Detailed host API documentation lives in [docs/API_ENDPOINTS.md](docs/API_ENDPOINTS.md).
+
+---
+
+## Detection Rules
+
+Detection is deterministic and rule-based. It runs only after successful ledger verification.
+
+| Rule | Severity | Trigger |
+|---|---|---|
+| `DELETE_CREATE` | High | `DELETE` followed by `CREATE` on the same known target within 300 seconds |
+| `MODIFY_BURST` | Medium | Repeated `MODIFY` actions against the same known target in a short window |
+| `DESTRUCTIVE_BURST` | High | Multiple destructive actions by the same user/session within 15 seconds |
+| `SCRIPTED_DESTRUCTIVE_ACTION` | High | `DELETE` or `MODIFY` launched by scripting parents outside interactive sessions |
+
+Alerts are persisted with stable signatures to avoid duplicate writes across repeated or concurrent detection runs.
+
+---
+
+## Testing And Verification
+
+KALYX tests focus on correctness properties that support its integrity claims.
 
 Run:
 
@@ -549,7 +481,7 @@ python3 -m compileall kalyx
 python3 -m pytest -q
 ```
 
-Frontend build:
+Frontend build check:
 
 ```bash
 cd frontend
@@ -557,71 +489,33 @@ npm ci
 npm run build
 ```
 
-## Continuous Integration
+| Area | Covered Behavior |
+|---|---|
+| Ledger integrity | Valid append, deterministic verification, hash mismatch detection |
+| Corruption handling | Invalid JSON, invalid record type, previous-hash mismatch, payload hash mismatch |
+| Concurrent appends | File-lock protected sequence and hash continuity under parallel writes |
+| Pipeline validation | Missing fields, invalid PID/PPID, empty command rejection |
+| Ingestion trust gate | Ingestion blocked after tampering or checkpoint inconsistency |
+| Checkpoints | Creation, deduplication, self-hash validation, chain validation, truncation detection |
+| Trust states | `VERIFIED`, `PARTIALLY_TRUSTED`, `UNTRUSTED`, `EMPTY`, `NO_LEDGER` behavior |
+| Detection rules | Delete/create, modify burst, destructive burst, scripted destructive actions |
+| Alert persistence | Deduplication and concurrent write safety |
+| Host API | Status, ingest, verify, detect, alerts, ledger, API-key behavior |
+| Anchor service | Anchor creation, anchor-chain integrity, stale rejection, latest lookup |
+| Anchor CLI/client | `kalyx anchor`, `kalyx anchor-status`, environment overrides, comparison states |
+| Angular service/state | API-key header behavior and trust-state display mapping |
 
-KALYX uses a lightweight GitHub Actions workflow for pull requests and pushes to
-`main`. The workflow validates that a fresh checkout can install dependencies and
-run the core project checks without deploying anything.
+GitHub Actions runs backend compile/tests and Angular production build on pushes and pull requests to `main`.
 
-CI checks:
-
-- backend install with `python3 -m pip install -e . pytest`
-- Python compile check with `python3 -m compileall kalyx`
-- backend tests with `python3 -m pytest -q`
-- frontend install with `npm ci`
-- Angular production build with `npm run build`
-
-CI intentionally does not run browser-based Angular/Karma tests yet. The current
-automated frontend gate is the deterministic build check; browser runner setup can
-be added later once it is stable in CI.
-
-Equivalent local checks:
-
-```bash
-python3 -m compileall kalyx
-./.venv/bin/python -m pytest -q
-
-cd frontend
-npm ci
-npm run build
-```
-
-## Security Boundary
-
-### What KALYX Guarantees
-
-- Records accepted into the ledger are chained with deterministic canonical hashes.
-- Local record edits, malformed ledger lines, broken previous-hash links, and hash mismatches are detectable.
-- Verification identifies the first untrusted record and reports the last trusted index and hash.
-- Local checkpoints detect truncation or replacement when the current ledger falls behind the latest checkpoint or no longer matches the checkpointed hash.
-- Concurrent local writers are serialized for ledger appends.
-- Alert persistence deduplicates stable alert signatures under concurrent writes.
-- Detection is deterministic and explainable for the implemented rules.
-
-### What KALYX Does Not Guarantee
-
-- KALYX does not prove that an ingested event came from a truthful source.
-- Ingestion authenticity is outside the current trust boundary.
-- A full host compromise is outside the current guarantees.
-- An attacker who can rewrite the complete ledger, local checkpoints, and all local state may evade local-only verification.
-- External anchoring is a prototype comparison utility, not a full attestation or recovery system.
-- KALYX does not prevent attacks, block malware, or provide authoritative endpoint protection.
-
-## Performance Limitations
-
-- Ledger storage is JSONL on local disk.
-- Verification is O(n) over the ledger because every record must be recomputed in order.
-- Local checkpoint comparison is lightweight, but it does not replace full verification.
-- There is no ledger segmentation or incremental checkpoint verification yet.
-- Detection scans a recent replay window rather than using an index.
-- Alert storage is append-only JSONL without query indexing.
-
-These limits are intentional for the current scope: the project prioritizes deterministic behaviour and inspectable backend correctness over scale claims.
+---
 
 ## Project Structure
 
 ```text
 kalyx/
+  anchor/
+    api.py
+    storage.py
   api/
     app.py
     dashboard.html
@@ -644,26 +538,32 @@ kalyx/
   models/
     schema.py
   services/
+    anchor_client.py
     detection.py
     ledger.py
     pipeline.py
   tests/
     test_alert_persistence.py
+    test_anchor_service.py
+    test_anchor_status.py
+    test_api_auth.py
     test_api_endpoints.py
     test_checkpoint_integrity.py
+    test_cli_anchor.py
     test_detection_rules.py
+    test_ingestion_trust_gate.py
     test_ledger_corruption.py
     test_ledger_integrity.py
     test_pipeline_validation.py
+
 docs/
   API_ENDPOINTS.md
   ARCHITECTURE.md
+  CONFIGURATION.md
   DETECTION_ENGINE.md
   TESTING_SUMMARY.md
   THREAT_MODEL.md
-logs/
-  checkpoints.jsonl
-  exec_chain.jsonl
+
 frontend/
   angular.json
   package.json
@@ -674,26 +574,106 @@ frontend/
       features/
       layout/
       shared/
+    environments/
+
 pyproject.toml
 setup.py
+requirements.txt
 sample_exec.log
 ```
 
-## Tradeoffs
+Runtime files are created locally and ignored by git:
 
-- **Why JSONL**: it is append-friendly, reviewable, easy to corrupt deliberately in tests, and simple to verify line by line.
-- **Why deterministic rules**: rule output can be explained, reproduced, tested, and deduplicated without hidden model state.
-- **Why local checkpoints**: they provide a simple deletion/truncation warning and use the same evidence shape the Raspberry Pi anchor stores.
-- **Why no database yet**: a database would add operational complexity before the project needs indexed storage.
-- **Why no ML**: the current goal is correctness and explainability, not probabilistic classification.
-- **Why explainability is prioritized**: integrity workflows need clear reasons, record boundaries, and evidence fields more than opaque scores.
+```text
+logs/exec_chain.jsonl
+logs/checkpoints.jsonl
+logs/alerts.jsonl
+logs/.kalyx_status.json
+anchors/anchor_chain.jsonl
+reports/ledger_export.json
+```
+
+---
+
+## Configuration
+
+| Variable | Required | Purpose |
+|---|---:|---|
+| `KALYX_API_KEY` | No | Protects host API operational routes when configured |
+| `KALYX_ANCHOR_URL` | No | Default anchor URL for `kalyx anchor` and `kalyx anchor-status` |
+| `KALYX_LEDGER_ID` | No | Default ledger ID used for anchor submission and comparison |
+
+Example:
+
+```bash
+export KALYX_API_KEY=example-dev-key
+export KALYX_ANCHOR_URL=http://127.0.0.1:8081
+export KALYX_LEDGER_ID=kalyx-main-host
+```
+
+Frontend API settings live in:
+
+```text
+frontend/src/environments/environment.ts
+```
+
+Default frontend API configuration points at:
+
+```text
+http://127.0.0.1:8000
+```
+
+Frontend configuration is visible in built JavaScript. Do not treat it as secret storage.
+
+---
+
+## Limitations
+
+- KALYX does not prevent attacks or block processes.
+- KALYX does not prove that an ingested event came from a truthful source.
+- Raw execsnoop lines and structured API payloads are treated as input, not proof.
+- A full host compromise can defeat local-only evidence.
+- Raspberry Pi anchoring stores checkpoint boundaries, not full host state.
+- Anchor comparison depends on the Pi service being reachable.
+- Live eBPF ingestion requires a compatible Linux environment with `execsnoop-bpfcc` and suitable privileges.
+- Ledger storage is local JSONL, not an indexed database.
+- Verification is O(n) because each ledger record is recomputed in order.
+- Detection uses deterministic rules, not ML or external threat intelligence.
+
+---
+
+## Design Tradeoffs
+
+- **JSONL ledger**: simple, append-friendly, inspectable, and easy to verify line by line.
+- **Canonical hashing**: deterministic serialization makes verification reproducible.
+- **Local checkpoints**: record verified boundaries before external anchoring.
+- **Raspberry Pi anchor**: provides an independent checkpoint authority without introducing a large distributed system.
+- **Rule-based detection**: explainable, deterministic, and testable.
+- **Thin interfaces**: CLI, API, and Angular call shared backend services instead of duplicating trust logic.
+- **No database**: keeps the prototype inspectable and avoids operational complexity before indexed storage is needed.
+
+---
+
+## Further Documentation
+
+| Document | Purpose |
+|---|---|
+| [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | Backend architecture, service layers, request flow |
+| [docs/API_ENDPOINTS.md](docs/API_ENDPOINTS.md) | Host API route details |
+| [docs/DETECTION_ENGINE.md](docs/DETECTION_ENGINE.md) | Detection rules, semantics, limitations |
+| [docs/THREAT_MODEL.md](docs/THREAT_MODEL.md) | Trust boundaries and out-of-scope assumptions |
+| [docs/CONFIGURATION.md](docs/CONFIGURATION.md) | Environment and frontend API configuration |
+| [docs/TESTING_SUMMARY.md](docs/TESTING_SUMMARY.md) | Test coverage and validation approach |
+
+---
 
 ## Roadmap
 
-- Ledger segmentation
-- Raspberry Pi anchor hardening
-- Signed checkpoint exchange
-- Incremental verification
-- Authenticated ingestion
-- Typed alert schemas
-- Indexed replay windows
+Future work that is not implemented in the current repository:
+
+- Signed checkpoint exchange between host and anchor
+- Ledger segmentation and incremental verification
+- Authenticated event-source ingestion
+- Indexed alert and replay storage
+- Stronger Raspberry Pi anchor hardening
+- Browser-based Angular test coverage in CI
