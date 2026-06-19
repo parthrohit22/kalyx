@@ -2,7 +2,7 @@ from setuptools import find_packages, setup
 
 setup(
     name="kalyx",
-    version="0.1.0",
+    version="0.6.1",
     packages=find_packages(),
     install_requires=[
         "fastapi>=0.115,<1.0",

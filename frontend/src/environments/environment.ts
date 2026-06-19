@@ -1,6 +1,6 @@
 export const environment = {
   kalyxApi: {
-    apiBaseUrl: 'http://127.0.0.1:8000',
+    apiBaseUrl: 'http://192.168.64.2:8000',
     apiKey: '',
   },
 } as const;
