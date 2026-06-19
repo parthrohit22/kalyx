@@ -248,7 +248,7 @@ Anchor submission statuses include:
 |---|---|
 | `ACCEPTED` | New checkpoint boundary was stored |
 | `ALREADY_ANCHORED` | Same ledger/checkpoint hash was already stored |
-| `REJECTED_STALE` | Checkpoint index is older than the latest Pi anchor for that ledger |
+| `REJECTED_STALE` | Non-duplicate checkpoint index is not newer than the latest Pi anchor for that ledger |
 | `REJECTED_INVALID` | Payload or existing Pi anchor chain failed validation |
 
 ### Compare Local And Pi State
@@ -318,6 +318,8 @@ frontend/src/environments/environment.ts
 ```
 
 The dashboard calls the host FastAPI API for anchor status and anchor submission. It never calls the Raspberry Pi anchor service directly.
+
+The localhost API target is the default same-machine setup. Demonstration or multi-machine environments may point this setting at a reachable host IP instead.
 
 ---
 
@@ -588,7 +590,7 @@ requirements.txt
 sample_exec.log
 ```
 
-Runtime files are created locally and ignored by git:
+Runtime JSONL and status files are created locally and ignored by git:
 
 ```text
 logs/exec_chain.jsonl
@@ -596,6 +598,11 @@ logs/checkpoints.jsonl
 logs/alerts.jsonl
 logs/.kalyx_status.json
 anchors/anchor_chain.jsonl
+```
+
+Ledger exports are created locally, and `.gitignore` allows report JSON files to be tracked if added:
+
+```text
 reports/ledger_export.json
 ```
 
@@ -670,6 +677,7 @@ Frontend configuration is visible in built JavaScript. Do not treat it as secret
 | [docs/THREAT_MODEL.md](docs/THREAT_MODEL.md) | Trust boundaries and out-of-scope assumptions |
 | [docs/CONFIGURATION.md](docs/CONFIGURATION.md) | Environment and frontend API configuration |
 | [docs/TESTING_SUMMARY.md](docs/TESTING_SUMMARY.md) | Test coverage and validation approach |
+| [DEMO.md](DEMO.md) | End-to-end demonstration workflow |
 
 ---
 
