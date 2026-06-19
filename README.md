@@ -94,6 +94,7 @@ flowchart TD
     CLI --> Detect
     API --> Detect
     CLI --> AnchorClient
+    API --> AnchorClient
 
     Ingest --> TrustGate
     TrustGate --> Ledger
@@ -284,7 +285,7 @@ The Angular dashboard is a local operations console over the FastAPI host API. I
 |---|---|
 | Overview | Current trust state, ledger state, checkpoint state, recent records, recent alerts |
 | Ledger | Searchable/filterable ledger records with full JSON drawer |
-| Verification | Run backend verification and inspect trust metadata |
+| Verification | Run backend verification, inspect trust metadata, check Anchor Status, and submit the latest checkpoint to the anchor service |
 | Ingestion | Submit structured events or raw execsnoop-style lines |
 | Detection | Run verification-gated detection |
 | Alerts | Search and filter persisted alerts |
@@ -315,6 +316,8 @@ Configured in:
 ```text
 frontend/src/environments/environment.ts
 ```
+
+The dashboard calls the host FastAPI API for anchor status and anchor submission. It never calls the Raspberry Pi anchor service directly.
 
 ---
 
@@ -416,6 +419,8 @@ http://127.0.0.1:8000
 | `POST` | `/detect` | API key when configured | Run verification-gated detection |
 | `GET` | `/alerts` | Open | Return persisted alerts |
 | `GET` | `/ledger` | Open | Return recent parsed ledger records |
+| `GET` | `/anchor/status` | Open | Compare the latest local checkpoint with the latest Pi anchor |
+| `POST` | `/anchor` | API key when configured | Create or reuse a safe local checkpoint and submit it through the host anchor client |
 
 Optional local API-key protection:
 
@@ -501,9 +506,10 @@ npm run build
 | Detection rules | Delete/create, modify burst, destructive burst, scripted destructive actions |
 | Alert persistence | Deduplication and concurrent write safety |
 | Host API | Status, ingest, verify, detect, alerts, ledger, API-key behavior |
+| Host anchor API | Anchor status comparison, anchor submission, rejection states, unreachable anchors, untrusted ledger handling |
 | Anchor service | Anchor creation, anchor-chain integrity, stale rejection, latest lookup |
 | Anchor CLI/client | `kalyx anchor`, `kalyx anchor-status`, environment overrides, comparison states |
-| Angular service/state | API-key header behavior and trust-state display mapping |
+| Angular service/state | API-key header behavior, host anchor endpoint calls, and trust-state display mapping |
 
 GitHub Actions runs backend compile/tests and Angular production build on pushes and pull requests to `main`.
 

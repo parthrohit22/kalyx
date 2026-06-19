@@ -1,6 +1,6 @@
 # KALYX Architecture
 
-KALYX is organized as a backend integrity workflow with thin interfaces. The core design goal is to keep verification, chaining, ingestion, and detection semantics in shared services so the CLI, FastAPI API, and Angular operations console all reflect the same backend behaviour.
+KALYX is organized as an integrity and anchoring workflow with thin interfaces. The core design goal is to keep verification, chaining, ingestion, detection, and anchor semantics in shared services so the CLI, FastAPI API, and Angular operations console all reflect the same backend behaviour.
 
 ## Layered Architecture
 
@@ -16,6 +16,7 @@ flowchart TD
         Pipeline["Pipeline Service<br/>parse -> validate -> enrich -> normalize -> chain"]
         Ledger["Ledger Service<br/>load -> verify -> checkpoint -> status -> export"]
         Detection["Detection Service<br/>verify trust -> replay window -> persist alerts"]
+        AnchorClient["Anchor Client<br/>checkpoint submit -> status compare"]
     end
 
     subgraph CoreLayer["Core and Engine Layer"]
@@ -33,6 +34,11 @@ flowchart TD
         StatusFile[("logs/.kalyx_status.json")]
     end
 
+    subgraph ExternalAnchor["Raspberry Pi Anchor Authority"]
+        AnchorAPI["Anchor API<br/>kalyx-anchor"]
+        AnchorChain[("anchors/anchor_chain.jsonl")]
+    end
+
     CLI --> Pipeline
     API --> Pipeline
     Frontend --> API
@@ -41,6 +47,8 @@ flowchart TD
     API --> Ledger
     CLI --> Detection
     API --> Detection
+    CLI --> AnchorClient
+    API --> AnchorClient
 
     Pipeline --> Engine
     Pipeline --> Schemas
@@ -55,6 +63,12 @@ flowchart TD
     Detection --> Ledger
     Detection --> Rules
     Rules --> AlertLog
+
+    AnchorClient --> Ledger
+    AnchorClient --> Checkpoints
+    AnchorClient --> AnchorAPI
+    AnchorAPI --> AnchorChain
+    AnchorAPI -. latest anchor .-> AnchorClient
 ```
 
 ## Component Responsibilities
@@ -66,6 +80,9 @@ flowchart TD
 - `kalyx/services/pipeline.py`: shared parse, validate, enrich, normalize, and chain workflow.
 - `kalyx/services/ledger.py`: ledger loading, deterministic verification, local checkpoints, trust-state classification, status, and export services.
 - `kalyx/services/detection.py`: trusted-record replay, deterministic rule execution, and alert persistence.
+- `kalyx/services/anchor_client.py`: host-side checkpoint submission and local-vs-Pi anchor status comparison.
+- `kalyx/anchor/api.py`: Raspberry Pi FastAPI anchor authority for checkpoint submission and latest-anchor lookup.
+- `kalyx/anchor/storage.py`: Pi-side append-only anchor chain validation and persistence.
 - `kalyx/core/chain.py`: file-lock protected append-only hash chaining.
 - `kalyx/core/detector.py`: deterministic behavioural rules and in-memory alert deduplication.
 - `kalyx/core/alerts.py`: file-lock protected alert persistence and persisted alert deduplication.
@@ -87,9 +104,9 @@ raw_line or event
   -> append to hash-chained ledger
 ```
 
-The API, CLI, and Angular frontend do not implement their own ledger logic. They call or display results from `ingest_payload`, `verify_ledger_state`, `create_checkpoint`, `get_status_summary`, `detect_and_persist_alerts`, `load_ledger_records`, and `load_alerts`.
+The API, CLI, and Angular frontend do not implement their own ledger logic. They call or display results from `ingest_payload`, `verify_ledger_state`, `create_checkpoint`, `get_status_summary`, `detect_and_persist_alerts`, `load_ledger_records`, `load_alerts`, `submit_latest_checkpoint_to_anchor`, and `compare_anchor_status`.
 
-The Angular console is the primary local demo interface, but it remains a presentation layer. It calls FastAPI endpoints for status, verification, ingestion, detection, alert retrieval, and ledger inspection. It never decides whether evidence is trusted.
+The Angular console is the primary local demo interface, but it remains a presentation layer. It calls FastAPI endpoints for status, verification, ingestion, detection, alert retrieval, ledger inspection, anchor status, and anchor submission. It never decides whether evidence is trusted, and it never calls the Raspberry Pi anchor service directly.
 
 ## Trust Boundaries
 
@@ -117,6 +134,23 @@ Local integrity boundary
 KALYX can verify the continuity of records it has accepted. It does not prove that an external event source was truthful. Ingestion authenticity is outside the current boundary.
 
 Local checkpoints add another local boundary: KALYX can compare the current ledger against the latest checkpoint and report if the ledger has been truncated or replaced behind that checkpoint. Because checkpoints are still local files, external anchoring is required before this becomes resilient to full local compromise.
+
+External anchoring adds a separate authority boundary:
+
+```text
+Host verified checkpoint
+        |
+        v
+Host Anchor Client
+        |
+        v
+Raspberry Pi Anchor API
+        |
+        v
+Pi append-only anchor chain
+```
+
+The host submits checkpoint boundaries and later compares the latest local checkpoint against the latest Pi anchor for the configured ledger ID. The Pi stores checkpoint boundaries; it does not verify full host state or replace local ledger verification.
 
 ## Concurrency Model
 
@@ -207,6 +241,8 @@ sequenceDiagram
     participant Ledger as Ledger File
     participant Verify as verify_ledger_state
     participant Detect as Detection Service
+    participant AnchorClient as Anchor Client
+    participant Pi as Raspberry Pi Anchor API
 
     Client->>API: ingest raw_line or event
     API->>Pipeline: ingest_payload()
@@ -225,9 +261,25 @@ sequenceDiagram
     API->>Detect: detect_and_persist_alerts()
     Detect->>Verify: require trusted ledger
     Detect-->>Client: alert summary
+
     Client->>API: inspect ledger
     API->>Ledger: load_ledger_records()
     Ledger-->>Client: recent parsed records
+
+    Client->>API: anchor latest checkpoint
+    API->>AnchorClient: submit_latest_checkpoint_to_anchor()
+    AnchorClient->>Verify: require trusted ledger
+    AnchorClient->>Ledger: create or reuse safe checkpoint
+    AnchorClient->>Pi: POST /anchor
+    Pi-->>AnchorClient: accepted, duplicate, or rejection state
+    AnchorClient-->>Client: anchor submission result
+
+    Client->>API: check anchor status
+    API->>AnchorClient: compare_anchor_status()
+    AnchorClient->>Ledger: load latest local checkpoint
+    AnchorClient->>Pi: GET /anchor/latest
+    Pi-->>AnchorClient: latest Pi anchor or missing/unreachable state
+    AnchorClient-->>Client: MATCH/AHEAD/BEHIND/DIVERGENCE/NO_ANCHOR/UNREACHABLE
 ```
 
 ## Data Flow Diagram
@@ -240,8 +292,13 @@ flowchart LR
     Normalize --> Chain[Hash Chain Append]
     Chain --> Ledger[(exec_chain.jsonl)]
     Ledger --> Verify[Deterministic Verification]
+    Verify --> Checkpoint[(checkpoints.jsonl)]
+    Checkpoint --> AnchorClient[Host Anchor Client]
+    AnchorClient --> PiAnchor[Raspberry Pi Anchor API]
+    PiAnchor --> AnchorChain[(anchor_chain.jsonl)]
     Ledger --> Detect[Rule Detection]
     Detect --> Alerts[(alerts.jsonl)]
     Verify --> Interfaces[CLI / API / Angular]
+    AnchorClient --> Interfaces
     Alerts --> Interfaces
 ```

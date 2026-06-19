@@ -22,7 +22,7 @@ npm ci
 npm run build
 ```
 
-Frontend unit tests can be added with Angular's test runner. If tests are present, run:
+Frontend unit tests live under `frontend/src/app/**/*.spec.ts` and can be run with Angular's test runner:
 
 ```bash
 cd frontend
@@ -174,6 +174,7 @@ Detection may be run repeatedly from different interfaces. Replay-safe persisten
 File:
 
 - `kalyx/tests/test_checkpoint_integrity.py`
+- `kalyx/tests/test_ingestion_trust_gate.py`
 
 The checkpoint tests prove:
 
@@ -181,10 +182,33 @@ The checkpoint tests prove:
 - repeated checkpoint creation for the same ledger boundary is deduplicated
 - a ledger truncated behind the latest checkpoint is reported as `UNTRUSTED`
 - a tampered ledger with a valid prefix is reported as `PARTIALLY_TRUSTED`
+- ingestion is blocked when the current ledger or checkpoint state is not trusted
 
 Why it matters:
 
 Hash-chain verification can prove whether the current file is internally consistent. Checkpoints add local memory of a previous trusted boundary, which lets KALYX flag truncation or replacement before external anchoring is available.
+
+## Anchor Service And Client Tests
+
+Files:
+
+- `kalyx/tests/test_anchor_service.py`
+- `kalyx/tests/test_anchor_status.py`
+- `kalyx/tests/test_cli_anchor.py`
+
+The anchor tests prove:
+
+- the Raspberry Pi anchor service appends checkpoint boundaries to its own chain
+- duplicate checkpoint submissions return `ALREADY_ANCHORED`
+- stale checkpoint submissions return `REJECTED_STALE`
+- broken Pi-side anchor chains reject new anchors
+- latest-anchor lookup returns the newest anchor for one ledger
+- anchor status comparison reports `MATCH`, `AHEAD`, `BEHIND`, `DIVERGENCE`, `NO_ANCHOR`, and `UNREACHABLE`
+- CLI anchor commands use `KALYX_ANCHOR_URL` and `KALYX_LEDGER_ID`
+
+Why it matters:
+
+External anchoring is only useful if the host and Pi agree on checkpoint boundaries and expose disagreement without requiring a live Pi in the test suite.
 
 ## API Route Tests
 
@@ -199,15 +223,49 @@ The API route tests prove:
 - verification route handling can create a checkpoint
 - malformed ingestion payloads are rejected by the schema layer
 - alerts route handling returns persisted alert data consistently
+- `GET /anchor/status` returns comparison, no-anchor, and unreachable states through the host API wrapper
+- `POST /anchor` returns accepted submissions, Pi rejection states, and untrusted-ledger states without requiring a real Pi
 
 Why it matters:
 
 CLI, API, and the Angular console should remain thin consumers of the same backend services. These tests guard against interface drift.
 
+## API Authentication Tests
+
+File:
+
+- `kalyx/tests/test_api_auth.py`
+
+The API auth tests prove:
+
+- operational routes such as `/ingest`, `/verify`, `/detect`, and `/anchor` are protected when `KALYX_API_KEY` is configured
+- read routes such as `/status`, `/alerts`, `/ledger`, and `/anchor/status` remain unprotected
+- missing or invalid keys return `401`
+- authentication failures block operational side effects
+
+Why it matters:
+
+The API-key mechanism is deliberately lightweight, but protected routes still need consistent enforcement across normal evidence operations and anchor submission.
+
+## Angular API Service Tests
+
+Files:
+
+- `frontend/src/app/core/api/kalyx-api.service.spec.ts`
+- `frontend/src/app/core/state/dashboard-state.service.spec.ts`
+
+The Angular tests prove:
+
+- configured API keys are attached to protected frontend requests
+- 401 responses produce a clear frontend error message
+- Angular calls host `/anchor/status` and host `/anchor`
+- Angular does not construct Raspberry Pi anchor API URLs
+- trust-state display mapping does not upgrade backend `UNTRUSTED` states
+
 ## Residual Test Gaps
 
-Current tests emphasize backend integrity semantics. Useful future coverage would include:
+Current tests emphasize backend integrity semantics and typed Angular service behavior. They do not claim:
 
 - Angular component and route tests for the operations console
-- typed alert schema validation once alert models are formalized
-- incremental verification tests after segment checkpoints are introduced
+- formal typed alert schema validation
+- incremental verification beyond current full-ledger verification

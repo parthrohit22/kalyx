@@ -74,6 +74,8 @@ The Angular console sends `X-KALYX-API-Key` only when
 | `POST` | `/detect` | API key when configured | Run deterministic detection through the shared detection service |
 | `GET` | `/alerts` | Unprotected | Return persisted alert records |
 | `GET` | `/ledger` | Unprotected | Return recent parsed ledger records for inspection |
+| `GET` | `/anchor/status` | Unprotected | Compare the latest local checkpoint with the latest Raspberry Pi anchor |
+| `POST` | `/anchor` | API key when configured | Create or reuse a safe local checkpoint and submit it through the host anchor client |
 
 ## GET /
 
@@ -219,6 +221,84 @@ Response schema:
   "count": 1
 }
 ```
+
+## GET /anchor/status
+
+Compares the latest local checkpoint with the latest Raspberry Pi anchor for the configured ledger ID. Internally, this route calls the shared anchor client logic used by `kalyx anchor-status`.
+
+Protection: unprotected read endpoint.
+
+Configuration:
+
+- `KALYX_ANCHOR_URL`, default `http://127.0.0.1:8081`
+- `KALYX_LEDGER_ID`, default `kalyx-main-host`
+
+```bash
+curl http://127.0.0.1:8000/anchor/status
+```
+
+Response fields:
+
+```json
+{
+  "status": "MATCH",
+  "ledger_id": "kalyx-main-host",
+  "anchor_url": "http://127.0.0.1:8081",
+  "local_index": 3,
+  "local_hash": "67f1c6e1...",
+  "pi_index": 3,
+  "pi_hash": "67f1c6e1...",
+  "reason": null,
+  "message": null
+}
+```
+
+Status values include:
+
+- `MATCH`: local checkpoint and Pi anchor agree.
+- `AHEAD`: local checkpoint is newer than the Pi anchor.
+- `BEHIND`: Pi anchor is newer than the local checkpoint.
+- `DIVERGENCE`: checkpoint indices match but hashes differ.
+- `NO_ANCHOR`: the Pi has no anchor for the configured ledger.
+- `UNREACHABLE`: the host could not contact the Pi anchor API.
+
+## POST /anchor
+
+Creates or reuses a safe local checkpoint and submits that checkpoint boundary to the Raspberry Pi anchor authority. Internally, this route calls the shared anchor client logic used by `kalyx anchor`.
+
+Protection: API key when configured.
+
+Configuration:
+
+- `KALYX_ANCHOR_URL`, default `http://127.0.0.1:8081`
+- `KALYX_LEDGER_ID`, default `kalyx-main-host`
+
+```bash
+curl -X POST http://127.0.0.1:8000/anchor
+```
+
+Response fields:
+
+```json
+{
+  "status": "ACCEPTED",
+  "ledger_id": "kalyx-main-host",
+  "anchor_url": "http://127.0.0.1:8081",
+  "accepted": true,
+  "checkpoint_index": 3,
+  "checkpoint_hash": "67f1c6e1...",
+  "pi_anchor_index": 2,
+  "pi_anchor_hash": "8bd1024a...",
+  "reason": null
+}
+```
+
+Expected behavior:
+
+- Trusted ledgers produce or reuse a local checkpoint before submission.
+- Untrusted ledgers return `LEDGER_NOT_TRUSTED` without posting to the Pi.
+- Pi rejections such as `REJECTED_STALE` are returned as response status values.
+- Network failures return `UNREACHABLE` with a reason.
 
 ## POST /detect
 
@@ -426,3 +506,33 @@ Detection can also be run from the CLI:
 ```bash
 kalyx detect
 ```
+
+## Raspberry Pi Anchor API
+
+The anchor API is a separate FastAPI application started with `kalyx-anchor`. It is called by the host anchor client, not by Angular.
+
+Base URL for local development:
+
+```text
+http://127.0.0.1:8081
+```
+
+| Method | Path | Protection | Description |
+| --- | --- | --- | --- |
+| `POST` | `/anchor` | Unprotected in current prototype | Store a checkpoint boundary in the Pi-side anchor chain |
+| `GET` | `/anchor/latest?ledger_id=...` | Unprotected in current prototype | Return the latest anchor accepted for one ledger, or `404` when none exists |
+
+### POST /anchor
+
+Accepts a checkpoint boundary from the host and appends it to the Pi-side anchor chain when valid.
+
+Expected behavior:
+
+- `ACCEPTED` when a new checkpoint boundary is stored.
+- `ALREADY_ANCHORED` when the same ledger checkpoint hash already exists.
+- `REJECTED_STALE` when the submitted checkpoint index is behind the latest anchor for that ledger.
+- `REJECTED_INVALID` when the existing anchor chain or submitted payload cannot be validated.
+
+### GET /anchor/latest
+
+Returns the latest Pi anchor for a ledger ID. This is the endpoint used by host anchor status comparison.

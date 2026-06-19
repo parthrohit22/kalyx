@@ -31,6 +31,20 @@ Raspberry Pi Anchor Authority
 
 Angular talks only to the Host FastAPI API. It does not call the Raspberry Pi anchor directly. The Pi anchor may be run locally for testing.
 
+### AT3 Addressing Note
+
+Same-machine demos can use the local defaults:
+
+- Angular Dashboard -> `http://127.0.0.1:8000`
+- Host API -> `http://127.0.0.1:8081` for a local anchor service
+
+The AT3 environment uses a split topology:
+
+- Angular Dashboard -> UTM Host FastAPI at `http://192.168.64.2:8000`
+- UTM Host FastAPI -> Raspberry Pi anchor URL from `KALYX_ANCHOR_URL`
+
+`frontend/src/environments/environment.ts` controls Angular-to-host communication. `KALYX_ANCHOR_URL` controls host-to-Pi communication. Angular should never be pointed at the Raspberry Pi anchor API.
+
 ## 4. Start Services
 
 Terminal 1, Host API:
@@ -64,7 +78,7 @@ Default URLs:
 - Anchor API: `http://127.0.0.1:8081`
 - Angular Dashboard: `http://127.0.0.1:4200`
 
-Use `http://<pi-ip>:8081` when the anchor runs on Raspberry Pi instead of the local machine.
+Use `http://<pi-ip>:8081` for `KALYX_ANCHOR_URL` when the anchor runs on Raspberry Pi instead of the local machine. In the AT3 UTM setup, the frontend API target is `http://192.168.64.2:8000` because the browser must reach the FastAPI host from outside the UTM guest.
 
 ## 5. Verify Initial State
 
@@ -198,7 +212,7 @@ Detection runs only on trusted evidence. If verification reports an untrusted st
 
 - `kalyx` command not found: activate the Python virtual environment or reinstall the package in editable mode.
 - Wrong Python virtual environment: confirm `which kalyx`, `which kalyx-api`, and `which kalyx-anchor`.
-- Frontend cannot reach backend: confirm `kalyx-api` is running at `http://127.0.0.1:8000` and check `frontend/src/environments/environment.ts`.
+- Frontend cannot reach backend: confirm `kalyx-api` is running and check `frontend/src/environments/environment.ts`. Use `http://127.0.0.1:8000` for same-machine operation or a reachable host IP such as `http://192.168.64.2:8000` in the AT3 UTM setup.
 - Raspberry Pi anchor unreachable: confirm `kalyx-anchor` is running, the Pi IP is reachable, and port `8081` is open.
 - Localhost confusion between Mac, UTM, and Pi: `127.0.0.1` means the current machine. Use the Pi IP from the host when anchoring to Raspberry Pi.
 - No ledger found: run `kalyx ingest`, then `kalyx verify`.
