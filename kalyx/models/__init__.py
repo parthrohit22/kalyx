@@ -2,6 +2,8 @@
 
 from .schema import (
     AlertResponse,
+    AnchorStatusResponse,
+    AnchorSubmissionResponse,
     DetectionResponse,
     IngestRequest,
     IngestResponse,
@@ -12,6 +14,8 @@ from .schema import (
 
 __all__ = [
     "AlertResponse",
+    "AnchorStatusResponse",
+    "AnchorSubmissionResponse",
     "DetectionResponse",
     "IngestRequest",
     "IngestResponse",

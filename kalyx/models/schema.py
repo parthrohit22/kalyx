@@ -138,3 +138,39 @@ class DetectionResponse(BaseModel):
     skipped: bool
     reason: str | None
     verification: dict[str, Any]
+
+
+class AnchorStatusResponse(BaseModel):
+    """External anchor comparison response payload."""
+
+    status: str
+    ledger_id: str
+    anchor_url: str
+    local_index: int | None = None
+    local_hash: str | None = None
+    pi_index: int | None = None
+    pi_hash: str | None = None
+    reason: str | None = None
+    message: str | None = None
+
+
+class AnchorSubmissionResponse(BaseModel):
+    """External anchor submission response payload."""
+
+    status: str
+    ledger_id: str
+    anchor_url: str
+    accepted: bool = False
+    checkpoint_index: int | None = None
+    checkpoint_hash: str | None = None
+    checkpoint_written: bool | None = None
+    checkpoint_reason: str | None = None
+    checkpoint_state: str | None = None
+    verification_status: str | None = None
+    anchor_index: int | None = None
+    pi_anchor_index: int | None = None
+    pi_anchor_hash: str | None = None
+    pi_previous_anchor_hash: str | None = None
+    accepted_at: str | None = None
+    latest_checkpoint_index: int | None = None
+    reason: str | None = None

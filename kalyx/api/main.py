@@ -14,6 +14,8 @@ from fastapi.staticfiles import StaticFiles
 
 from kalyx.models import (
     AlertResponse,
+    AnchorStatusResponse,
+    AnchorSubmissionResponse,
     DetectionResponse,
     IngestRequest,
     IngestResponse,
@@ -23,11 +25,15 @@ from kalyx.models import (
 )
 from kalyx.services import (
     LedgerNotTrustedError,
+    compare_anchor_status,
+    default_anchor_url,
+    default_ledger_id,
     detect_and_persist_alerts,
     get_status_summary,
     ingest_payload,
     load_alerts,
     load_ledger_records,
+    submit_latest_checkpoint_to_anchor,
     verify_ledger_state,
 )
 
@@ -198,6 +204,30 @@ def post_detect() -> DetectionResponse:
     """
     result = detect_and_persist_alerts()
     return DetectionResponse(**result)
+
+
+@app.get("/anchor/status", response_model=AnchorStatusResponse)
+def get_anchor_status() -> AnchorStatusResponse:
+    """Compare the latest local checkpoint with the latest external anchor."""
+    result = compare_anchor_status(
+        anchor_url=default_anchor_url(),
+        ledger_id=default_ledger_id(),
+    )
+    return AnchorStatusResponse(**result)
+
+
+@app.post(
+    "/anchor",
+    response_model=AnchorSubmissionResponse,
+    dependencies=[Depends(require_api_key)],
+)
+def post_anchor_checkpoint() -> AnchorSubmissionResponse:
+    """Create or reuse a local checkpoint and submit it to the anchor authority."""
+    result = submit_latest_checkpoint_to_anchor(
+        anchor_url=default_anchor_url(),
+        ledger_id=default_ledger_id(),
+    )
+    return AnchorSubmissionResponse(**result)
 
 
 def run() -> None:

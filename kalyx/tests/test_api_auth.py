@@ -117,14 +117,14 @@ def _protected_route(path: str, method: str = "POST") -> APIRoute:
 
 
 def test_operational_routes_are_protected_and_read_routes_are_unprotected():
-    for path in ("/ingest", "/verify", "/detect"):
+    for path in ("/ingest", "/verify", "/detect", "/anchor"):
         route = _protected_route(path)
         assert any(
             dependency.call is require_api_key
             for dependency in route.dependant.dependencies
         )
 
-    for path in ("/status", "/alerts", "/ledger"):
+    for path in ("/status", "/alerts", "/ledger", "/anchor/status"):
         route = _protected_route(path, method="GET")
         assert not any(
             dependency.call is require_api_key
