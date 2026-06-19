@@ -6,14 +6,17 @@ import pytest
 from pydantic import ValidationError
 
 from kalyx.api.main import (
+    get_anchor_status,
     get_alerts,
     get_ledger,
     get_status,
+    post_anchor_checkpoint,
     post_detect,
     post_ingest,
     post_verify,
 )
 from kalyx.models import IngestRequest
+from kalyx.services import anchor_client
 
 
 def test_status_route_reports_trust_state(tmp_path, monkeypatch):
@@ -163,3 +166,282 @@ def test_detect_route_returns_response_shape_for_valid_ledger(tmp_path, monkeypa
     assert data["skipped"] is False
     assert data["reason"] is None
     assert data["verification"]["status"] == "VALID"
+
+
+def test_anchor_status_route_compares_local_checkpoint_to_pi_anchor(
+    tmp_path,
+    monkeypatch,
+):
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("KALYX_ANCHOR_URL", "http://pi-anchor.test:8081")
+    monkeypatch.setenv("KALYX_LEDGER_ID", "api-ledger")
+
+    post_ingest(
+        IngestRequest(
+            event={
+                "comm": "touch",
+                "pid": 9000,
+                "ppid": 4000,
+                "argv": "touch /tmp/api-anchor-status.txt",
+                "ret": 0,
+                "uid": 0,
+            },
+            source="api_test",
+        )
+    )
+    checkpoint = post_verify().model_dump()["checkpoint"]
+    captured: dict[str, str] = {}
+
+    def fake_fetch_latest_anchor(anchor_url: str, ledger_id: str) -> dict[str, object]:
+        captured["anchor_url"] = anchor_url
+        captured["ledger_id"] = ledger_id
+        return {
+            "checkpoint_index": checkpoint["checkpoint_index"],
+            "checkpoint_hash": checkpoint["checkpoint_hash"],
+        }
+
+    monkeypatch.setattr(anchor_client, "fetch_latest_anchor", fake_fetch_latest_anchor)
+
+    data = get_anchor_status().model_dump()
+
+    assert data["status"] == "MATCH"
+    assert data["ledger_id"] == "api-ledger"
+    assert data["anchor_url"] == "http://pi-anchor.test:8081"
+    assert data["local_index"] == checkpoint["checkpoint_index"]
+    assert data["local_hash"] == checkpoint["checkpoint_hash"]
+    assert data["pi_index"] == checkpoint["checkpoint_index"]
+    assert data["pi_hash"] == checkpoint["checkpoint_hash"]
+    assert captured == {
+        "anchor_url": "http://pi-anchor.test:8081",
+        "ledger_id": "api-ledger",
+    }
+
+
+def test_anchor_status_route_returns_no_anchor_when_pi_has_no_record(
+    tmp_path,
+    monkeypatch,
+):
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("KALYX_ANCHOR_URL", "http://pi-anchor.test:8081")
+    monkeypatch.setenv("KALYX_LEDGER_ID", "api-ledger")
+
+    local_checkpoint = {
+        "checkpoint_index": 4,
+        "checkpoint_hash": "b" * 64,
+    }
+    captured: dict[str, str] = {}
+
+    monkeypatch.setattr(
+        anchor_client,
+        "load_latest_checkpoint",
+        lambda checkpoint_path: local_checkpoint,
+    )
+
+    def fake_fetch_latest_anchor(anchor_url: str, ledger_id: str) -> None:
+        captured["anchor_url"] = anchor_url
+        captured["ledger_id"] = ledger_id
+        return None
+
+    monkeypatch.setattr(anchor_client, "fetch_latest_anchor", fake_fetch_latest_anchor)
+
+    data = get_anchor_status().model_dump()
+
+    assert data["status"] == "NO_ANCHOR"
+    assert data["reason"] == "ANCHOR_NOT_FOUND"
+    assert data["message"] == "No external anchor found for this ledger"
+    assert data["ledger_id"] == "api-ledger"
+    assert data["anchor_url"] == "http://pi-anchor.test:8081"
+    assert data["local_index"] == 4
+    assert data["local_hash"] == "b" * 64
+    assert data["pi_index"] is None
+    assert data["pi_hash"] is None
+    assert captured == {
+        "anchor_url": "http://pi-anchor.test:8081",
+        "ledger_id": "api-ledger",
+    }
+
+
+def test_anchor_status_route_returns_unreachable_when_pi_request_fails(
+    tmp_path,
+    monkeypatch,
+):
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("KALYX_ANCHOR_URL", "http://pi-anchor.test:8081")
+    monkeypatch.setenv("KALYX_LEDGER_ID", "api-ledger")
+
+    local_checkpoint = {
+        "checkpoint_index": 2,
+        "checkpoint_hash": "c" * 64,
+    }
+    captured: dict[str, str] = {}
+
+    monkeypatch.setattr(
+        anchor_client,
+        "load_latest_checkpoint",
+        lambda checkpoint_path: local_checkpoint,
+    )
+
+    def fake_fetch_latest_anchor(anchor_url: str, ledger_id: str) -> None:
+        captured["anchor_url"] = anchor_url
+        captured["ledger_id"] = ledger_id
+        raise anchor_client.AnchorClientError("connection refused")
+
+    monkeypatch.setattr(anchor_client, "fetch_latest_anchor", fake_fetch_latest_anchor)
+
+    data = get_anchor_status().model_dump()
+
+    assert data["status"] == "UNREACHABLE"
+    assert data["reason"] == "connection refused"
+    assert data["message"] == "Anchor service unreachable: connection refused"
+    assert data["ledger_id"] == "api-ledger"
+    assert data["anchor_url"] == "http://pi-anchor.test:8081"
+    assert data["local_index"] == 2
+    assert data["local_hash"] == "c" * 64
+    assert data["pi_index"] is None
+    assert data["pi_hash"] is None
+    assert captured == {
+        "anchor_url": "http://pi-anchor.test:8081",
+        "ledger_id": "api-ledger",
+    }
+
+
+def test_anchor_submission_route_posts_checkpoint_boundary_without_real_pi(
+    tmp_path,
+    monkeypatch,
+):
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("KALYX_ANCHOR_URL", "http://pi-anchor.test:8081")
+    monkeypatch.setenv("KALYX_LEDGER_ID", "api-ledger")
+
+    post_ingest(
+        IngestRequest(
+            event={
+                "comm": "touch",
+                "pid": 9100,
+                "ppid": 4000,
+                "argv": "touch /tmp/api-anchor-submit.txt",
+                "ret": 0,
+                "uid": 0,
+            },
+            source="api_test",
+        )
+    )
+    captured: dict[str, object] = {}
+
+    def fake_post_anchor_payload(
+        payload: dict[str, object],
+        anchor_url: str,
+    ) -> dict[str, object]:
+        captured["payload"] = payload
+        captured["anchor_url"] = anchor_url
+        return {
+            "status": "ACCEPTED",
+            "anchor_index": 7,
+            "accepted_at": "2026-06-17T12:00:00+00:00",
+            "pi_anchor_hash": "a" * 64,
+            "pi_previous_anchor_hash": "0" * 64,
+        }
+
+    monkeypatch.setattr(anchor_client, "post_anchor_payload", fake_post_anchor_payload)
+
+    data = post_anchor_checkpoint().model_dump()
+    payload = captured["payload"]
+
+    assert data["status"] == "ACCEPTED"
+    assert data["accepted"] is True
+    assert data["ledger_id"] == "api-ledger"
+    assert data["anchor_url"] == "http://pi-anchor.test:8081"
+    assert data["checkpoint_index"] == 1
+    assert data["checkpoint_hash"] == payload["checkpoint_hash"]
+    assert data["pi_anchor_index"] == 7
+    assert data["pi_anchor_hash"] == "a" * 64
+    assert captured["anchor_url"] == "http://pi-anchor.test:8081"
+    assert payload["ledger_id"] == "api-ledger"
+
+
+def test_anchor_submission_route_returns_pi_rejection_without_real_pi(
+    tmp_path,
+    monkeypatch,
+):
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("KALYX_ANCHOR_URL", "http://pi-anchor.test:8081")
+    monkeypatch.setenv("KALYX_LEDGER_ID", "api-ledger")
+
+    post_ingest(
+        IngestRequest(
+            event={
+                "comm": "touch",
+                "pid": 9200,
+                "ppid": 4000,
+                "argv": "touch /tmp/api-anchor-rejected.txt",
+                "ret": 0,
+                "uid": 0,
+            },
+            source="api_test",
+        )
+    )
+    captured: dict[str, object] = {}
+
+    def fake_post_anchor_payload(
+        payload: dict[str, object],
+        anchor_url: str,
+    ) -> dict[str, object]:
+        captured["payload"] = payload
+        captured["anchor_url"] = anchor_url
+        return {
+            "status": "REJECTED_STALE",
+            "reason": "STALE_CHECKPOINT_INDEX",
+            "latest_checkpoint_index": 9,
+        }
+
+    monkeypatch.setattr(anchor_client, "post_anchor_payload", fake_post_anchor_payload)
+
+    data = post_anchor_checkpoint().model_dump()
+    payload = captured["payload"]
+
+    assert data["status"] == "REJECTED_STALE"
+    assert data["accepted"] is False
+    assert data["reason"] == "STALE_CHECKPOINT_INDEX"
+    assert data["latest_checkpoint_index"] == 9
+    assert data["ledger_id"] == "api-ledger"
+    assert data["anchor_url"] == "http://pi-anchor.test:8081"
+    assert data["checkpoint_index"] == 1
+    assert data["checkpoint_hash"] == payload["checkpoint_hash"]
+    assert data["pi_anchor_index"] is None
+    assert data["pi_anchor_hash"] is None
+    assert captured["anchor_url"] == "http://pi-anchor.test:8081"
+    assert payload["ledger_id"] == "api-ledger"
+
+
+def test_anchor_submission_route_returns_untrusted_ledger_without_posting(
+    tmp_path,
+    monkeypatch,
+):
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("KALYX_ANCHOR_URL", "http://pi-anchor.test:8081")
+    monkeypatch.setenv("KALYX_LEDGER_ID", "api-ledger")
+    posted = False
+
+    def fake_post_anchor_payload(
+        payload: dict[str, object],
+        anchor_url: str,
+    ) -> dict[str, object]:
+        nonlocal posted
+        posted = True
+        return {"status": "ACCEPTED"}
+
+    monkeypatch.setattr(anchor_client, "post_anchor_payload", fake_post_anchor_payload)
+
+    data = post_anchor_checkpoint().model_dump()
+
+    assert data["status"] == "LEDGER_NOT_TRUSTED"
+    assert data["accepted"] is False
+    assert data["reason"] == "LEDGER_FILE_MISSING"
+    assert data["verification_status"] == "NO_LEDGER"
+    assert data["ledger_id"] == "api-ledger"
+    assert data["anchor_url"] == "http://pi-anchor.test:8081"
+    assert data["checkpoint_index"] is None
+    assert data["checkpoint_hash"] is None
+    assert data["pi_anchor_index"] is None
+    assert data["pi_anchor_hash"] is None
+    assert posted is False

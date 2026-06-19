@@ -13,6 +13,10 @@ import {
   KalyxApiConfig,
 } from './kalyx-api.config';
 import { AlertResponse } from '../models/alert.model';
+import {
+  AnchorStatusResponse,
+  AnchorSubmissionResponse,
+} from '../models/anchor.model';
 import { DetectionResponse } from '../models/detection.model';
 import {
   IngestResponse,
@@ -101,6 +105,25 @@ export class KalyxApiService {
         this.requestOptions({ params }),
       )
       .pipe(catchError((error) => this.handleError(error, 'GET /ledger')));
+  }
+
+  getAnchorStatus(): Observable<AnchorStatusResponse> {
+    return this.http
+      .get<AnchorStatusResponse>(
+        this.apiUrl('/anchor/status'),
+        this.requestOptions(),
+      )
+      .pipe(catchError((error) => this.handleError(error, 'GET /anchor/status')));
+  }
+
+  anchorLatestCheckpoint(): Observable<AnchorSubmissionResponse> {
+    return this.http
+      .post<AnchorSubmissionResponse>(
+        this.apiUrl('/anchor'),
+        {},
+        this.requestOptions(),
+      )
+      .pipe(catchError((error) => this.handleError(error, 'POST /anchor')));
   }
 
   private apiUrl(path: string): string {

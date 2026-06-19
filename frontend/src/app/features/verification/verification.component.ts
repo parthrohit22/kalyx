@@ -2,11 +2,16 @@ import { Component, OnInit } from '@angular/core';
 
 import { KalyxApiService } from '../../core/api/kalyx-api.service';
 import {
+  AnchorStatusResponse,
+  AnchorSubmissionResponse,
+} from '../../core/models/anchor.model';
+import {
   StatusResponse,
   VerificationResponse,
 } from '../../core/models/verification.model';
 import {
   BadgeTone,
+  formatValue,
   shortHash,
   toneForState,
 } from '../../core/models/ui.model';
@@ -38,6 +43,33 @@ import { ToastService } from '../../shared/toast/toast.service';
       </div>
 
       <section class="panel">
+        <div class="panel-heading">
+          <div>
+            <p>GET /anchor/status / POST /anchor</p>
+            <h3>Anchor Status</h3>
+          </div>
+          <div class="action-row">
+            <button type="button" class="button secondary" (click)="checkAnchorStatus()" [disabled]="anchorLoading || loading">Check Anchor Status</button>
+            <button type="button" class="button" (click)="anchorLatestCheckpoint()" [disabled]="anchorLoading || loading">Anchor Latest Checkpoint</button>
+          </div>
+        </div>
+
+        <div class="fact-grid">
+          <div>
+            <dt>Current State</dt>
+            <dd><app-status-badge [label]="anchorState" [tone]="toneForState(anchorState)" /></dd>
+          </div>
+          <div><dt>Submission</dt><dd>{{ anchorSubmission?.status || '--' }}</dd></div>
+          <div><dt>Ledger ID</dt><dd>{{ anchorLedgerId }}</dd></div>
+          <div><dt>Anchor URL</dt><dd>{{ anchorUrl }}</dd></div>
+          <div><dt>Local Checkpoint</dt><dd>{{ localCheckpointSummary }}</dd></div>
+          <div><dt>Pi Checkpoint</dt><dd>{{ piCheckpointSummary }}</dd></div>
+          <div><dt>Pi Anchor</dt><dd>{{ piAnchorSummary }}</dd></div>
+          <div><dt>Message</dt><dd>{{ anchorMessage }}</dd></div>
+        </div>
+      </section>
+
+      <section class="panel">
         <div class="fact-grid">
           <div><dt>Status</dt><dd>{{ rawStatus }}</dd></div>
           <div><dt>Trust State</dt><dd>{{ rawTrustState }}</dd></div>
@@ -55,7 +87,10 @@ import { ToastService } from '../../shared/toast/toast.service';
 export class VerificationComponent implements OnInit {
   status: StatusResponse | null = null;
   verification: VerificationResponse | null = null;
+  anchorStatus: AnchorStatusResponse | null = null;
+  anchorSubmission: AnchorSubmissionResponse | null = null;
   loading = false;
+  anchorLoading = false;
 
   constructor(
     private readonly api: KalyxApiService,
@@ -129,6 +164,45 @@ export class VerificationComponent implements OnInit {
     return this.source?.last_valid_hash;
   }
 
+  get anchorState(): string {
+    return this.anchorStatus?.status || '--';
+  }
+
+  get anchorLedgerId(): string {
+    return this.anchorStatus?.ledger_id || this.anchorSubmission?.ledger_id || '--';
+  }
+
+  get anchorUrl(): string {
+    return this.anchorStatus?.anchor_url || this.anchorSubmission?.anchor_url || '--';
+  }
+
+  get localCheckpointSummary(): string {
+    return this.checkpointSummary(
+      this.anchorStatus?.local_index ?? this.anchorSubmission?.checkpoint_index,
+      this.anchorStatus?.local_hash ?? this.anchorSubmission?.checkpoint_hash,
+    );
+  }
+
+  get piCheckpointSummary(): string {
+    return this.checkpointSummary(this.anchorStatus?.pi_index, this.anchorStatus?.pi_hash);
+  }
+
+  get piAnchorSummary(): string {
+    return this.checkpointSummary(
+      this.anchorSubmission?.pi_anchor_index ?? this.anchorSubmission?.anchor_index,
+      this.anchorSubmission?.pi_anchor_hash,
+    );
+  }
+
+  get anchorMessage(): string {
+    return (
+      this.anchorSubmission?.reason ||
+      this.anchorStatus?.message ||
+      this.anchorStatus?.reason ||
+      '--'
+    );
+  }
+
   verify(): void {
     this.loading = true;
     this.api.verifyLedger().subscribe({
@@ -147,8 +221,59 @@ export class VerificationComponent implements OnInit {
     });
   }
 
+  checkAnchorStatus(showToast = true): void {
+    this.anchorLoading = true;
+    this.api.getAnchorStatus().subscribe({
+      next: (response) => {
+        this.anchorStatus = response;
+        this.anchorLoading = false;
+        if (showToast) {
+          this.toast.show(`Anchor ${response.status}`, this.toastToneForState(response.status));
+        }
+      },
+      error: (error: Error) => {
+        this.anchorLoading = false;
+        this.toast.show(error.message, 'danger');
+      }
+    });
+  }
+
+  anchorLatestCheckpoint(): void {
+    this.anchorLoading = true;
+    this.api.anchorLatestCheckpoint().subscribe({
+      next: (response) => {
+        this.anchorSubmission = response;
+        this.anchorLoading = false;
+        this.toast.show(`Anchor ${response.status}`, this.toastToneForState(response.status));
+        if (response.accepted) {
+          this.checkAnchorStatus(false);
+        }
+      },
+      error: (error: Error) => {
+        this.anchorLoading = false;
+        this.toast.show(error.message, 'danger');
+      }
+    });
+  }
+
   shortHash(value: string | null | undefined, size = 12): string {
     return shortHash(value, size);
+  }
+
+  private checkpointSummary(
+    index: number | null | undefined,
+    hash: string | null | undefined,
+  ): string {
+    if ((index === null || index === undefined) && !hash) {
+      return '--';
+    }
+
+    return `#${formatValue(index)} ${shortHash(hash, 18)}`;
+  }
+
+  private toastToneForState(value: string | null | undefined): 'success' | 'warning' | 'danger' | 'info' {
+    const tone = toneForState(value);
+    return tone === 'neutral' ? 'info' : tone;
   }
 
   toneForState(value: string | null | undefined): BadgeTone {

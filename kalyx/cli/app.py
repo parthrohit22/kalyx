@@ -3,16 +3,17 @@
 from __future__ import annotations
 
 import json
-import os
 import subprocess
 import sys
 from typing import Any
-from urllib import error
 
 from kalyx.services import (
+    ANCHOR_ACCEPTED_STATUSES,
     LedgerNotTrustedError,
     compare_anchor_status,
     create_checkpoint,
+    default_anchor_url,
+    default_ledger_id,
     detect_and_persist_alerts,
     export_ledger_bundle,
     get_status_summary,
@@ -21,6 +22,7 @@ from kalyx.services import (
     load_alerts,
     load_ledger_records,
     post_anchor_payload as _post_anchor_payload,
+    submit_latest_checkpoint_to_anchor,
     verify_ledger_state,
 )
 
@@ -42,19 +44,6 @@ Usage:
   kalyx alerts
   kalyx --help
 """
-
-
-DEFAULT_ANCHOR_URL = "http://127.0.0.1:8081"
-DEFAULT_LEDGER_ID = "kalyx-main-host"
-ANCHOR_REQUIRED_FIELDS = (
-    "checkpoint_index",
-    "record_count",
-    "last_seq",
-    "last_hash",
-    "previous_checkpoint_hash",
-    "checkpoint_hash",
-)
-
 
 def print_help() -> None:
     """Print CLI usage help."""
@@ -150,73 +139,54 @@ def _parse_option(args: list[str], name: str, default: str) -> str:
     return value.strip()
 
 
-def _build_anchor_payload(
-    checkpoint_record: dict[str, Any],
-    ledger_id: str,
-) -> dict[str, Any]:
-    """Build the Phase 2 host-to-anchor payload from an existing checkpoint."""
-    missing = [field for field in ANCHOR_REQUIRED_FIELDS if field not in checkpoint_record]
-    if missing:
-        raise ValueError(f"Checkpoint missing anchor field(s): {', '.join(missing)}")
-
-    return {
-        "ledger_id": ledger_id,
-        "checkpoint_index": checkpoint_record["checkpoint_index"],
-        "record_count": checkpoint_record["record_count"],
-        "last_seq": checkpoint_record["last_seq"],
-        "last_hash": checkpoint_record["last_hash"],
-        "previous_checkpoint_hash": checkpoint_record["previous_checkpoint_hash"],
-        "checkpoint_hash": checkpoint_record["checkpoint_hash"],
-    }
-
-
 def anchor(args: list[str]) -> None:
     """Create or reuse a local checkpoint and send it to the external anchor."""
     anchor_url = _parse_option(
         args,
         "--anchor-url",
-        os.getenv("KALYX_ANCHOR_URL", DEFAULT_ANCHOR_URL),
+        default_anchor_url(),
     )
     ledger_id = _parse_option(
         args,
         "--ledger-id",
-        os.getenv("KALYX_LEDGER_ID", DEFAULT_LEDGER_ID),
+        default_ledger_id(),
     )
 
-    verification = verify_ledger_state()
-    checkpoint_record = create_checkpoint(verification=verification)
+    result = submit_latest_checkpoint_to_anchor(
+        anchor_url=anchor_url,
+        ledger_id=ledger_id,
+        post_func=_post_anchor_payload,
+    )
 
     print("KALYX External Anchor")
     print("---------------------")
 
-    if not verification.get("valid"):
+    status_value = result.get("status")
+
+    if status_value == "LEDGER_NOT_TRUSTED":
         print("[ERROR] Ledger is not trusted; anchor skipped")
-        print(f"[ERROR] Verification status: {verification.get('status')}")
-        print(f"[ERROR] Reason: {verification.get('reason')}")
+        print(f"[ERROR] Verification status: {result.get('verification_status')}")
+        print(f"[ERROR] Reason: {result.get('reason')}")
         raise SystemExit(1)
 
-    if checkpoint_record is None:
+    if status_value == "NO_CHECKPOINT":
         print("[ERROR] No checkpoint available to anchor")
         raise SystemExit(1)
 
-    if checkpoint_record.get("reason") not in {None, "CHECKPOINT_ALREADY_CURRENT"}:
+    if status_value == "CHECKPOINT_NOT_ANCHORABLE":
         print("[ERROR] Checkpoint is not anchorable")
-        print(f"[ERROR] Reason: {checkpoint_record.get('reason')}")
+        print(f"[ERROR] Reason: {result.get('reason')}")
         raise SystemExit(1)
 
-    payload = _build_anchor_payload(checkpoint_record, ledger_id)
+    if status_value == "UNREACHABLE":
+        print(f"[ERROR] Anchor service unreachable: {result.get('reason')}")
+        raise SystemExit(1)
 
-    try:
-        result = _post_anchor_payload(payload, anchor_url)
-    except (OSError, error.URLError) as exc:
-        print(f"[ERROR] Anchor service unreachable: {exc}")
-        raise SystemExit(1) from exc
-    except (json.JSONDecodeError, ValueError) as exc:
-        print(f"[ERROR] Anchor service returned an invalid response: {exc}")
-        raise SystemExit(1) from exc
+    if status_value == "INVALID_RESPONSE":
+        print(f"[ERROR] Anchor service returned an invalid response: {result.get('reason')}")
+        raise SystemExit(1)
 
-    status_value = result.get("status")
-    if status_value not in {"ACCEPTED", "ALREADY_ANCHORED"}:
+    if status_value not in ANCHOR_ACCEPTED_STATUSES:
         print(f"[ERROR] Anchor rejected checkpoint: {status_value}")
         reason = result.get("reason")
         if reason:
@@ -226,9 +196,9 @@ def anchor(args: list[str]) -> None:
     print(f"[OK] Anchor status    : {status_value}")
     print(f"Ledger ID           : {ledger_id}")
     print(f"Anchor URL          : {anchor_url.rstrip('/')}")
-    print(f"Checkpoint index    : {payload['checkpoint_index']}")
-    print(f"Checkpoint hash     : {payload['checkpoint_hash']}")
-    print(f"Pi anchor index     : {result.get('anchor_index')}")
+    print(f"Checkpoint index    : {result.get('checkpoint_index')}")
+    print(f"Checkpoint hash     : {result.get('checkpoint_hash')}")
+    print(f"Pi anchor index     : {result.get('pi_anchor_index')}")
     print(f"Pi anchor hash      : {result.get('pi_anchor_hash')}")
 
 
@@ -260,12 +230,12 @@ def anchor_status(args: list[str]) -> None:
     anchor_url = _parse_option(
         args,
         "--anchor-url",
-        os.getenv("KALYX_ANCHOR_URL", DEFAULT_ANCHOR_URL),
+        default_anchor_url(),
     )
     ledger_id = _parse_option(
         args,
         "--ledger-id",
-        os.getenv("KALYX_LEDGER_ID", DEFAULT_LEDGER_ID),
+        default_ledger_id(),
     )
 
     result = compare_anchor_status(anchor_url=anchor_url, ledger_id=ledger_id)

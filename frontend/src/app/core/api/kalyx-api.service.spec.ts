@@ -86,6 +86,9 @@ describe('KalyxApiService API key support', () => {
 
     service.runDetection().subscribe();
     expect(headerValue(http)).toBe('demo-key');
+
+    service.anchorLatestCheckpoint().subscribe();
+    expect(headerValue(http)).toBe('demo-key');
   });
 
   it('does not send the API key header when no key is configured', () => {
@@ -121,5 +124,21 @@ describe('KalyxApiService API key support', () => {
     expect(message).toBe(
       'POST /verify failed: Authentication failed. Check frontend API key configuration.',
     );
+  });
+
+  it('calls the host anchor endpoints', () => {
+    const { service, http } = createService({
+      apiBaseUrl: 'http://backend.test/',
+      apiKey: '',
+    });
+
+    service.getAnchorStatus().subscribe();
+    expect(http.lastRequest?.method).toBe('GET');
+    expect(http.lastRequest?.url).toBe('http://backend.test/anchor/status');
+
+    service.anchorLatestCheckpoint().subscribe();
+    expect(http.lastRequest?.method).toBe('POST');
+    expect(http.lastRequest?.url).toBe('http://backend.test/anchor');
+    expect(http.lastRequest?.body).toEqual({});
   });
 });
