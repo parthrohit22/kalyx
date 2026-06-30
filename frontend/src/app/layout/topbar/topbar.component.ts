@@ -10,8 +10,8 @@ import { BadgeTone, toneForState } from '../../core/models/ui.model';
   template: `
     <header class="topbar">
       <div>
-        <p>Operations Console</p>
-        <h2>Ledger integrity workspace</h2>
+        <p>Operations console</p>
+        <h2>Evidence integrity workspace</h2>
       </div>
 
       <div class="topbar-status">

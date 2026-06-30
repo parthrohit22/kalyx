@@ -21,7 +21,7 @@ type RawField = 'raw_line' | 'source';
     <section class="page">
       <div class="page-heading">
         <div>
-          <p>POST /ingest</p>
+          <p>Evidence capture</p>
           <h2>Ingestion</h2>
         </div>
       </div>

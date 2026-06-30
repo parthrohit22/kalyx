@@ -20,7 +20,7 @@ import { ToastService } from '../../shared/toast/toast.service';
     <section class="page">
       <div class="page-heading">
         <div>
-          <p>GET /alerts</p>
+          <p>Detection findings</p>
           <h2>Alerts</h2>
         </div>
         <button type="button" class="button secondary" (click)="loadAlerts()">Refresh Alerts</button>

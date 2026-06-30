@@ -18,7 +18,7 @@ import { ToastService } from '../../shared/toast/toast.service';
     <section class="page">
       <div class="page-heading">
         <div>
-          <p>Audit area</p>
+          <p>Technical evidence</p>
           <h2>Raw Evidence</h2>
         </div>
         <button type="button" class="button secondary" (click)="loadEvidence()">Refresh Evidence</button>

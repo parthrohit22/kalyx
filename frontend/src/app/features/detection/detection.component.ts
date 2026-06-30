@@ -19,7 +19,7 @@ import { ToastService } from '../../shared/toast/toast.service';
     <section class="page">
       <div class="page-heading">
         <div>
-          <p>POST /detect</p>
+          <p>Trusted analysis</p>
           <h2>Detection</h2>
         </div>
         <button type="button" class="button" (click)="runDetection()" [disabled]="loading">Run Detection</button>

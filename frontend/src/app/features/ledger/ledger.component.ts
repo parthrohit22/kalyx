@@ -20,7 +20,7 @@ import { ToastService } from '../../shared/toast/toast.service';
     <section class="page">
       <div class="page-heading">
         <div>
-          <p>GET /ledger</p>
+          <p>Execution evidence</p>
           <h2>Ledger Inspection</h2>
         </div>
         <button type="button" class="button secondary" (click)="loadLedger()">Refresh Ledger</button>
