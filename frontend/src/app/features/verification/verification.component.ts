@@ -28,7 +28,7 @@ import { ToastService } from '../../shared/toast/toast.service';
     <section class="page">
       <div class="page-heading">
         <div>
-          <p>POST /verify</p>
+          <p>Integrity assurance</p>
           <h2>Verification</h2>
         </div>
         <button type="button" class="button" (click)="verify()" [disabled]="loading">Verify Ledger</button>
@@ -45,7 +45,7 @@ import { ToastService } from '../../shared/toast/toast.service';
       <section class="panel">
         <div class="panel-heading">
           <div>
-            <p>GET /anchor/status / POST /anchor</p>
+            <p>External trust authority</p>
             <h3>Anchor Status</h3>
           </div>
           <div class="action-row">
