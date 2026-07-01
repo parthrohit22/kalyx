@@ -1,6 +1,6 @@
 # Detection Engine
 
-KALYX uses deterministic rule-based behavioural detection. The goal is not to classify threats with a hidden score. The goal is to turn trusted ledger records into explainable alerts when specific, testable patterns appear.
+KALYX uses deterministic rule-based behavioural detection. The goal is not to classify threats with a hidden score. The goal is to turn hash-chain-verified ledger records into explainable alerts when specific, testable patterns appear.
 
 ## Why Rule-Based Detection
 
@@ -16,7 +16,7 @@ KALYX intentionally avoids ML, external threat intelligence, and opaque scoring.
 
 ## Detection Preconditions
 
-Detection runs only after successful ledger verification. It can be triggered from the CLI, the FastAPI API, or the Angular console, but all interfaces call the same shared detection service.
+Detection runs only after successful full-ledger hash-chain verification. It can be triggered from the CLI, the FastAPI API, or the Angular console, but all interfaces call the same shared detection service.
 
 `detect_and_persist_alerts` first calls `verify_ledger_state`. If verification fails, detection returns:
 
@@ -29,7 +29,9 @@ Detection runs only after successful ledger verification. It can be triggered fr
 }
 ```
 
-This prevents KALYX from generating behavioural alerts from corrupted evidence.
+This prevents KALYX from generating behavioural alerts from a malformed or hash-chain-invalid ledger.
+
+The current detection service calls `verify_ledger_state` without loading the local checkpoint chain. It therefore does not enforce checkpoint continuity. `/status` can report an internally valid ledger as `UNTRUSTED` because it is behind or inconsistent with a checkpoint while detection still runs against that ledger.
 
 ## Deterministic Semantics
 
@@ -188,7 +190,8 @@ It does not:
 - use threat intelligence
 - detect every suspicious process pattern
 - authenticate source events
-- run if the ledger is not trusted
+- run when full-ledger hash-chain verification fails
+- enforce local checkpoint continuity before detection
 - index the full ledger for large historical queries
 
 These limits are part of the design. KALYX favours deterministic, explainable backend behaviour over broad but weak claims.
