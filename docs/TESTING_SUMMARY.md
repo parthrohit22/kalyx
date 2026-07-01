@@ -269,3 +269,5 @@ Current tests emphasize backend integrity semantics and typed Angular service be
 - Angular component and route tests for the operations console
 - formal typed alert schema validation
 - incremental verification beyond current full-ledger verification
+- a ledger-level `INVALID_RECORD_TYPE` corruption test
+- checkpoint-continuity enforcement before detection; the current detection service gates on full-ledger hash-chain verification only

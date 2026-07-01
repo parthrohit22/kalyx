@@ -54,47 +54,20 @@ The Angular operations console reads frontend API settings from:
 frontend/src/environments/environment.ts
 ```
 
-Default local configuration:
+### Same-Machine Setup
 
-```ts
-export const environment = {
-  kalyxApi: {
-    apiBaseUrl: 'http://127.0.0.1:8000',
-    apiKey: '',
-  },
-} as const;
-```
+Set `kalyxApi.apiBaseUrl` to `http://127.0.0.1:8000` when Angular and FastAPI run on the same machine.
 
-Fields:
+### Multi-Machine / Linux Virtual Machine Setup
 
-| Field | Required | Purpose | Default behavior |
-| --- | --- | --- | --- |
-| `kalyxApi.apiBaseUrl` | Yes | FastAPI base URL used by the Angular `KalyxApiService`. | Points at local FastAPI on `http://127.0.0.1:8000`. |
-| `kalyxApi.apiKey` | No | Optional value sent as `X-KALYX-API-Key` on frontend API requests. | Blank means no API key header is sent. |
+Set `kalyxApi.apiBaseUrl` to a host address reachable from the browser. The checked-in configuration points Angular to the Linux host running FastAPI at `http://192.168.64.2:8000`. This address is specific to the current demonstration environment, where the backend runs inside a Linux virtual machine; other multi-machine setups should use their own reachable host API address.
 
-Demo environments may need a reachable host address instead of localhost. For example, the AT3 UTM setup points Angular at the UTM host API:
+In both setups, Angular communicates only with the host FastAPI API. Host-to-Pi anchoring is configured separately with `KALYX_ANCHOR_URL`; Angular must never use the Pi anchor URL.
 
-```ts
-export const environment = {
-  kalyxApi: {
-    apiBaseUrl: 'http://192.168.64.2:8000',
-    apiKey: '',
-  },
-} as const;
-```
-
-This is still Angular-to-host communication. Host-to-Pi anchoring remains controlled by `KALYX_ANCHOR_URL`.
-
-For protected backend deployments:
-
-```ts
-export const environment = {
-  kalyxApi: {
-    apiBaseUrl: 'http://127.0.0.1:8000',
-    apiKey: 'example-dev-key',
-  },
-} as const;
-```
+| Field | Required | Purpose |
+| --- | --- | --- |
+| `kalyxApi.apiBaseUrl` | Yes | Host FastAPI base URL used by `KalyxApiService`. |
+| `kalyxApi.apiKey` | No | Optional value sent as `X-KALYX-API-Key`; blank sends no API-key header. |
 
 Frontend API configuration is visible to anyone who can inspect the built
 JavaScript bundle. Treat it as local coursework/demo configuration, not secure

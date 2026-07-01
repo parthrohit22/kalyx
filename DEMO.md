@@ -1,5 +1,7 @@
 # KALYX Demo Guide
 
+AT3 documentation baseline: **KALYX v0.6.2**.
+
 ## 1. Purpose
 
 This guide demonstrates the working KALYX prototype end-to-end: ingest execution evidence, verify the hash-chained ledger, create checkpoints, anchor checkpoint boundaries, inspect anchor status, detect tampering, and run detection.
@@ -33,52 +35,64 @@ Angular talks only to the Host FastAPI API. It does not call the Raspberry Pi an
 
 ### AT3 Addressing Note
 
-Same-machine demos can use the local defaults:
-
-- Angular Dashboard -> `http://127.0.0.1:8000`
-- Host API -> `http://127.0.0.1:8081` for a local anchor service
-
-The AT3 environment uses a split topology:
-
-- Angular Dashboard -> UTM Host FastAPI at `http://192.168.64.2:8000`
-- UTM Host FastAPI -> Raspberry Pi anchor URL from `KALYX_ANCHOR_URL`
+The checked-in frontend configuration points Angular to the Linux host running the FastAPI backend at `http://192.168.64.2:8000`. This address is used for the current demonstration environment because the backend runs inside a Linux virtual machine. The host backend reaches the Raspberry Pi through `KALYX_ANCHOR_URL`.
 
 `frontend/src/environments/environment.ts` controls Angular-to-host communication. `KALYX_ANCHOR_URL` controls host-to-Pi communication. Angular should never be pointed at the Raspberry Pi anchor API.
 
 ## 4. Start Services
 
-Terminal 1, Host API:
+Start the Raspberry Pi first, the host backend second, and Angular last.
+
+### Terminal 1 — Raspberry Pi
 
 ```bash
-kalyx-api
-```
-
-If the anchor runs on a Raspberry Pi, start the host API with the Pi URL:
-
-```bash
-KALYX_ANCHOR_URL=http://<pi-ip>:8081 KALYX_LEDGER_ID=kalyx-demo kalyx-api
-```
-
-Terminal 2, Anchor API:
-
-```bash
+cd ~/kalyx
+source .venv/bin/activate
 kalyx-anchor
 ```
 
-Terminal 3, Angular dashboard:
+### Terminal 2 — Host Backend
 
 ```bash
-cd frontend
+cd ~/kalyx
+source .venv/bin/activate
+export KALYX_ANCHOR_URL=http://<pi-ip>:8081
+export KALYX_LEDGER_ID=kalyx-demo
+kalyx-api --host 0.0.0.0 --port 8000
+```
+
+### Terminal 3 — Angular
+
+```bash
+cd ~/kalyx/frontend
 npm start
 ```
 
-Default URLs:
+AT3 service addresses:
 
-- Host API: `http://127.0.0.1:8000`
-- Anchor API: `http://127.0.0.1:8081`
+- Host API: `http://<host-ip>:8000`
+- Raspberry Pi Anchor API: `http://<pi-ip>:8081`
 - Angular Dashboard: `http://127.0.0.1:4200`
 
-Use `http://<pi-ip>:8081` for `KALYX_ANCHOR_URL` when the anchor runs on Raspberry Pi instead of the local machine. In the AT3 UTM setup, the frontend API target is `http://192.168.64.2:8000` because the browser must reach the FastAPI host from outside the UTM guest.
+### Local Anchor Fallback
+
+If the Raspberry Pi is unavailable, run the anchor service in a separate terminal on the host:
+
+```bash
+cd ~/kalyx
+source .venv/bin/activate
+kalyx-anchor
+```
+
+Then configure the host backend terminal to use the local anchor before starting `kalyx-api`:
+
+```bash
+export KALYX_ANCHOR_URL=http://127.0.0.1:8081
+export KALYX_LEDGER_ID=kalyx-demo
+kalyx-api --host 0.0.0.0 --port 8000
+```
+
+For a complete same-machine setup, set `frontend/src/environments/environment.ts` to `http://127.0.0.1:8000`.
 
 ## 5. Verify Initial State
 
@@ -130,6 +144,8 @@ Dashboard route:
 - Click `Check Anchor Status`.
 - Click `Anchor Latest Checkpoint`.
 - Confirm the resulting anchor state.
+
+Verification creates or reuses the latest safe local checkpoint; it does not anchor that checkpoint automatically. `Anchor Latest Checkpoint` sends the checkpoint through the Host FastAPI API and host anchor client. `MATCH` means the local and Pi checkpoint indices and hashes agree.
 
 ## 8. Demonstrate State Change
 
@@ -195,7 +211,7 @@ kalyx detect
 kalyx alerts
 ```
 
-Detection runs only on trusted evidence. If verification reports an untrusted state, detection should skip rather than analyze corrupted evidence.
+Detection skips when full-ledger hash-chain verification fails. It does not currently evaluate checkpoint continuity, so use `/status` or the Overview screen separately when demonstrating checkpoint trust state.
 
 ## 11. Expected Success Signals
 
@@ -212,9 +228,9 @@ Detection runs only on trusted evidence. If verification reports an untrusted st
 
 - `kalyx` command not found: activate the Python virtual environment or reinstall the package in editable mode.
 - Wrong Python virtual environment: confirm `which kalyx`, `which kalyx-api`, and `which kalyx-anchor`.
-- Frontend cannot reach backend: confirm `kalyx-api` is running and check `frontend/src/environments/environment.ts`. Use `http://127.0.0.1:8000` for same-machine operation or a reachable host IP such as `http://192.168.64.2:8000` in the AT3 UTM setup.
+- Frontend cannot reach backend: confirm `kalyx-api` is running and check `frontend/src/environments/environment.ts`. Use `http://127.0.0.1:8000` for same-machine operation or a host API address reachable from the browser in any multi-machine setup.
 - Raspberry Pi anchor unreachable: confirm `kalyx-anchor` is running, the Pi IP is reachable, and port `8081` is open.
-- Localhost confusion between Mac, UTM, and Pi: `127.0.0.1` means the current machine. Use the Pi IP from the host when anchoring to Raspberry Pi.
+- Localhost confusion between the browser machine, Linux host, and Pi: `127.0.0.1` means the current machine. Use the Pi IP from the host when anchoring to Raspberry Pi.
 - No ledger found: run `kalyx ingest`, then `kalyx verify`.
 - Anchor status `AHEAD` after new checkpoint: run `kalyx anchor --anchor-url http://<anchor-host>:8081 --ledger-id kalyx-demo`, then check status again.
 
@@ -229,8 +245,8 @@ rm -f logs/exec_chain.jsonl.demo.bak
 
 Stop services with `Ctrl+C` in each terminal.
 
-Do not delete source files. If you want a clean demo state, optionally remove runtime logs only:
+No destructive reset is required for the AT3 demonstration. Preserve runtime evidence and Pi anchor data until the walkthrough and submission checks are complete. Do not delete `logs/`, `reports/`, or `anchors/` as part of the normal demo procedure.
 
-```bash
-rm -rf logs reports anchors
-```
+## 14. AT3 Source ZIP
+
+Submit the executable KALYX prototype as a source-code ZIP. No installable package is required. Exclude virtual environments, `node_modules`, build output, caches, and runtime demonstration data.

@@ -8,6 +8,8 @@
 
 **Execution Evidence Integrity System**
 
+**AT3 documentation baseline: KALYX v0.6.2**
+
 KALYX is an execution evidence integrity system for capturing, verifying, and externally anchoring execution history.
 
 KALYX is not an EDR, SIEM, antivirus, malware blocker, or full host attestation system. It does not prevent attacks. Its purpose is evidence integrity and trust verification.
@@ -42,7 +44,7 @@ KALYX addresses that problem by turning execution events into verifiable, hash-c
 | Verification engine | Recomputes the ledger chain and reports the first untrusted boundary |
 | Local checkpoints | Stores verified ledger boundaries in `logs/checkpoints.jsonl` using chained checkpoint hashes |
 | Trust-state enforcement | Blocks new ingestion when the ledger or checkpoint state is untrusted |
-| Detection engine | Runs deterministic behavioral rules only after successful verification |
+| Detection engine | Runs deterministic behavioral rules only after successful full-ledger hash-chain verification |
 | Alert persistence | Stores deduplicated alerts in `logs/alerts.jsonl` |
 | FastAPI host backend | Exposes status, ingestion, verification, detection, alerts, and ledger inspection |
 | Angular dashboard | Provides a local operations console over the FastAPI backend |
@@ -133,7 +135,7 @@ flowchart LR
     E --> F["Create checkpoint"]
     F --> G["Anchor checkpoint<br/>to Raspberry Pi"]
     G --> H["Compare anchor status"]
-    E --> I["Run detection<br/>only if trusted"]
+    E --> I["Run detection<br/>after hash-chain verification"]
     I --> J["Persist alerts"]
 ```
 
@@ -142,7 +144,7 @@ flowchart LR
 - **Verify**: the verification engine recomputes ledger hashes and reports the first untrusted boundary.
 - **Checkpoint**: trusted ledger boundaries are recorded in the local checkpoint chain.
 - **Anchor**: checkpoint boundaries can be submitted to the Raspberry Pi authority and compared with the latest external anchor.
-- **Detect**: deterministic rules run only on trusted evidence and persist deduplicated alerts.
+- **Detect**: deterministic rules run only after full-ledger hash-chain verification and persist deduplicated alerts. Detection does not currently evaluate local checkpoint continuity.
 
 ---
 
@@ -161,7 +163,7 @@ KALYX verifies evidence continuity. It does not prove event truth.
 | A local checkpoint was edited | Validate checkpoint self-hash |
 | Checkpoint history was reordered or broken | Validate previous-checkpoint hash chain |
 | Ledger fell behind a previous checkpoint | Compare current ledger against latest checkpoint boundary |
-| Detection ran only on trusted evidence | Detection service verifies before replaying records |
+| Detection ran only on hash-chain-verified evidence | Detection service verifies the full ledger chain before replaying records |
 | A checkpoint was externally anchored | Compare local checkpoint with latest Raspberry Pi anchor |
 
 ### What KALYX Cannot Verify
@@ -194,7 +196,7 @@ KALYX does not prove the original event source was truthful.
 | `EMPTY` | Ledger file exists but contains no records |
 | `NO_LEDGER` | No ledger file exists yet |
 
-Ingestion is blocked when the current ledger or checkpoint state is untrusted. Detection is skipped when verification fails.
+Ingestion is blocked when the current ledger or checkpoint state is untrusted. Detection is skipped when full-ledger hash-chain verification fails. Detection does not currently consult the checkpoint chain, so a checkpoint-inconsistent ledger can be reported as `UNTRUSTED` by status while still passing the detection service's narrower hash-chain gate.
 
 ---
 
@@ -305,10 +307,10 @@ Open:
 http://127.0.0.1:4200/
 ```
 
-Default frontend API target:
+Checked-in frontend API target for the current demonstration environment:
 
 ```text
-http://127.0.0.1:8000
+http://192.168.64.2:8000
 ```
 
 Configured in:
@@ -317,9 +319,11 @@ Configured in:
 frontend/src/environments/environment.ts
 ```
 
+This address identifies the Linux host running the FastAPI backend inside the current demonstration virtual machine; it is not a permanent deployment requirement.
+
 The dashboard calls the host FastAPI API for anchor status and anchor submission. It never calls the Raspberry Pi anchor service directly.
 
-The localhost API target is the default same-machine setup. Demonstration or multi-machine environments may point this setting at a reachable host IP instead.
+For a same-machine setup, change the frontend API target to `http://127.0.0.1:8000`. Demonstration or multi-machine environments must use an address that is reachable from the browser. The Raspberry Pi URL remains backend-only configuration.
 
 ---
 
@@ -388,7 +392,7 @@ npm start
 | `kalyx inspect` | Print ledger entries in readable form |
 | `kalyx export` | Export ledger records and verification state |
 | `kalyx audit` | Display auditd ledger access events for `kalyx_ledger_watch` |
-| `kalyx detect` | Run deterministic detection against trusted ledger evidence |
+| `kalyx detect` | Run deterministic detection after full-ledger hash-chain verification |
 | `kalyx alerts` | Print persisted alerts |
 | `kalyx --help` | Show command help |
 
@@ -499,7 +503,7 @@ npm run build
 | Area | Covered Behavior |
 |---|---|
 | Ledger integrity | Valid append, deterministic verification, hash mismatch detection |
-| Corruption handling | Invalid JSON, invalid record type, previous-hash mismatch, payload hash mismatch |
+| Corruption handling | Invalid and truncated JSON, previous-hash mismatch, payload hash mismatch |
 | Concurrent appends | File-lock protected sequence and hash continuity under parallel writes |
 | Pipeline validation | Missing fields, invalid PID/PPID, empty command rejection |
 | Ingestion trust gate | Ingestion blocked after tampering or checkpoint inconsistency |
@@ -630,11 +634,7 @@ Frontend API settings live in:
 frontend/src/environments/environment.ts
 ```
 
-Default frontend API configuration points at:
-
-```text
-http://127.0.0.1:8000
-```
+Same-machine and multi-machine settings are described in [docs/CONFIGURATION.md](docs/CONFIGURATION.md).
 
 Frontend configuration is visible in built JavaScript. Do not treat it as secret storage.
 
@@ -652,6 +652,8 @@ Frontend configuration is visible in built JavaScript. Do not treat it as secret
 - Ledger storage is local JSONL, not an indexed database.
 - Verification is O(n) because each ledger record is recomputed in order.
 - Detection uses deterministic rules, not ML or external threat intelligence.
+- Detection currently gates on full-ledger hash-chain verification and does not evaluate local checkpoint continuity.
+- The Raspberry Pi anchor API is unauthenticated in the current prototype and does not issue signed receipts.
 
 ---
 
@@ -678,6 +680,12 @@ Frontend configuration is visible in built JavaScript. Do not treat it as secret
 | [docs/CONFIGURATION.md](docs/CONFIGURATION.md) | Environment and frontend API configuration |
 | [docs/TESTING_SUMMARY.md](docs/TESTING_SUMMARY.md) | Test coverage and validation approach |
 | [DEMO.md](DEMO.md) | End-to-end demonstration workflow |
+
+---
+
+## AT3 Submission
+
+Submit the executable KALYX v0.6.2 prototype as a source-code ZIP. An installable package is not required. Exclude `.venv`, `node_modules`, and build artefacts; runtime logs and anchor data are demonstration data rather than distributable artefacts.
 
 ---
 

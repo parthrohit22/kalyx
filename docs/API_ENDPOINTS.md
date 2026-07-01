@@ -77,6 +77,13 @@ The Angular console sends `X-KALYX-API-Key` only when
 | `GET` | `/anchor/status` | Unprotected | Compare the latest local checkpoint with the latest Raspberry Pi anchor |
 | `POST` | `/anchor` | API key when configured | Create or reuse a safe local checkpoint and submit it through the host anchor client |
 
+### HTTP and State Conventions
+
+- Protected host operations return HTTP `401` when a configured API key is missing or invalid.
+- FastAPI request-schema validation failures return HTTP `422`.
+- `/ingest` returns HTTP `400` for pipeline validation failures and HTTP `409` when the ledger trust gate blocks an append.
+- `/verify`, `/detect`, and `/anchor` normally return HTTP `200` with their verification, skip, rejection, or reachability state in the response body.
+
 ## GET /
 
 Serves a minimal status page confirming that the FastAPI backend is running. The real operations console is the separate Angular app in `frontend/`.
@@ -93,7 +100,7 @@ Returns a concise ledger health summary. Internally, this calls `get_status_summ
 curl http://127.0.0.1:8000/status
 ```
 
-Response schema:
+Abbreviated response example:
 
 ```json
 {
@@ -137,7 +144,7 @@ Runs deterministic verification over the full ledger. If verification succeeds a
 curl -X POST http://127.0.0.1:8000/verify
 ```
 
-Successful verification:
+Abbreviated successful verification example:
 
 ```json
 {
@@ -157,7 +164,7 @@ Successful verification:
 }
 ```
 
-Verification failure example:
+Abbreviated verification failure example:
 
 ```json
 {
@@ -197,7 +204,7 @@ Query parameters:
 curl 'http://127.0.0.1:8000/ledger?limit=5'
 ```
 
-Response schema:
+Abbreviated response example:
 
 ```json
 {
@@ -237,7 +244,7 @@ Configuration:
 curl http://127.0.0.1:8000/anchor/status
 ```
 
-Response fields:
+Abbreviated response example:
 
 ```json
 {
@@ -277,7 +284,7 @@ Configuration:
 curl -X POST http://127.0.0.1:8000/anchor
 ```
 
-Response fields:
+Abbreviated response example:
 
 ```json
 {
@@ -302,13 +309,13 @@ Expected behavior:
 
 ## POST /detect
 
-Runs rule-based detection through `detect_and_persist_alerts`. Detection verifies the ledger first. If the ledger is not trusted, the endpoint returns `skipped: true` instead of an HTTP error.
+Runs rule-based detection through `detect_and_persist_alerts`. Detection performs full-ledger hash-chain verification first. If that verification fails, the endpoint returns `skipped: true` instead of an HTTP error. The current detection service does not evaluate local checkpoint continuity.
 
 ```bash
 curl -X POST http://127.0.0.1:8000/detect
 ```
 
-Response schema:
+Abbreviated response example:
 
 ```json
 {
@@ -530,9 +537,11 @@ Expected behavior:
 
 - `ACCEPTED` when a new checkpoint boundary is stored.
 - `ALREADY_ANCHORED` when the same ledger checkpoint hash already exists.
-- `REJECTED_STALE` when the submitted checkpoint index is behind the latest anchor for that ledger.
+- `REJECTED_STALE` when, after duplicate handling, the submitted checkpoint index is not newer than the latest Pi anchor for that ledger.
 - `REJECTED_INVALID` when the existing anchor chain or submitted payload cannot be validated.
+
+FastAPI request-model failures return HTTP `422` before anchor storage is called. Valid request shapes that fail anchor-chain or hash-field validation return HTTP `200` with `REJECTED_INVALID`.
 
 ### GET /anchor/latest
 
-Returns the latest Pi anchor for a ledger ID. This is the endpoint used by host anchor status comparison.
+Returns the latest Pi anchor for a ledger ID. This is the endpoint used by host anchor status comparison. It returns HTTP `404` when no anchor exists for the requested ledger. If strict validation finds that the stored Pi anchor chain is invalid, the current prototype fails the request rather than returning an unvalidated boundary.

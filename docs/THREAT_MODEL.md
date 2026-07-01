@@ -8,7 +8,9 @@ KALYX has a narrow trust boundary. It provides local tamper-evident ledger verif
 - `logs/.kalyx_status.json`: last verification status metadata.
 - `logs/checkpoints.jsonl`: local checkpoint history for previously verified ledger boundaries.
 - `logs/alerts.jsonl`: persisted detection alerts.
+- `anchors/anchor_chain.jsonl`: Raspberry Pi-side chain of externally stored checkpoint boundaries.
 - shared backend services that perform ingestion, verification, and detection.
+- the host anchor client and Raspberry Pi anchor API used for external comparison.
 
 ## Trusted Components
 
@@ -35,6 +37,8 @@ KALYX treats these as untrusted or only partially trusted:
 - event source truthfulness
 - callers that know the optional local API key, because the key gates operational
   API access but does not prove event truth
+- checkpoint claims submitted to the Raspberry Pi anchor API
+- network responses from an anchor service that is not independently authenticated
 
 ## Ingestion Assumptions
 
@@ -86,6 +90,25 @@ KALYX does not assume:
 - local checkpoints are equivalent to Raspberry Pi or remote anchoring
 - deleting both ledger and checkpoints is detectable without an external copy
 
+## Raspberry Pi Anchor Boundary
+
+```text
+Host
+  |
+  v
+Anchor Client
+  |
+  v
+Raspberry Pi Anchor API
+  |
+  v
+Anchor Chain
+```
+
+The host verifies its ledger and creates local checkpoint boundaries. The host anchor client submits those boundaries to the Raspberry Pi API, which stores them in `anchors/anchor_chain.jsonl` as a separate hash chain. Later, the host compares its latest local checkpoint with the latest Pi anchor and reports `MATCH`, `AHEAD`, `BEHIND`, `DIVERGENCE`, `NO_ANCHOR`, or `UNREACHABLE`.
+
+The Pi is an independent storage and comparison boundary, not an event-verification authority. It validates the structure and continuity of its own anchor chain, but it does not receive or independently validate every host event. It does not attest the host, prove event authenticity, prevent full host compromise, or issue signed anchor receipts. The current prototype anchor API is also unauthenticated, so network access and deployment controls remain outside KALYX's guarantees.
+
 ## Replay Assumptions
 
 Detection is replay-safe in the alert persistence sense:
@@ -94,7 +117,9 @@ Detection is replay-safe in the alert persistence sense:
 - stable alert signatures prevent duplicate persisted alerts
 - alert writes are serialized with a file lock
 
-Replay-safe alerting does not mean event replay attacks are impossible. It means repeated detection over the same trusted ledger records should not duplicate persisted alerts.
+Replay-safe alerting does not mean event replay attacks are impossible. It means repeated detection over the same hash-chain-verified ledger records should not duplicate persisted alerts.
+
+Detection currently requires successful full-ledger hash-chain verification. It does not evaluate local checkpoint continuity. A ledger can therefore pass detection's hash-chain gate while status reports `UNTRUSTED` because it conflicts with a prior local checkpoint.
 
 ## Local Compromise Assumptions
 
@@ -121,6 +146,7 @@ KALYX can detect:
 - truncation or replacement behind the latest local checkpoint
 - duplicate alert persistence attempts with the same stable alert signature
 - deterministic behavioural patterns implemented by the rule engine
+- disagreement between the latest local checkpoint and the latest reachable Pi anchor boundary
 
 Examples of detectable behavioural patterns:
 
@@ -134,18 +160,22 @@ Examples of detectable behavioural patterns:
 KALYX does not currently detect or guarantee protection against:
 
 - forged events before ingestion
-- unauthenticated API callers
+- caller identity or event-source authenticity beyond presentation of the optional shared API key
 - complete ledger rewrite with recomputed hashes and no external anchor
 - deletion of the whole ledger and local checkpoints followed by replacement
 - tampering by an attacker with full local filesystem and runtime control
 - kernel-level compromise
 - malware prevention or process blocking
 - authoritative identity of the user or process that generated an event
+- Pi-side independent validation of every host event
+- signed or cryptographically authenticated anchor receipts
+- host attestation or prevention of full host compromise
+- incremental verification from checkpoint boundaries; current verification replays the full ledger
 
 ## Current Security Boundary
 
 ```text
-KALYX guarantees local deterministic verification of accepted records.
+KALYX provides local deterministic verification of accepted records under the stated runtime and filesystem assumptions.
 KALYX does not guarantee authenticity of the original event source.
 ```
 
