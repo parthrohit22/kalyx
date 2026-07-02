@@ -9,7 +9,7 @@ environment variables are required for the default CLI workflow.
 | --- | --- | --- | --- | --- |
 | `KALYX_API_KEY` | No | Protects FastAPI operational endpoints such as ingestion, verification, and detection with the `X-KALYX-API-Key` request header. | Protected endpoints are allowed without an API key for local development. | `example-dev-key` |
 | `KALYX_ANCHOR_URL` | No | Raspberry Pi or local anchor service URL used by `kalyx anchor`, `kalyx anchor-status`, `GET /anchor/status`, and `POST /anchor`. | `http://127.0.0.1:8081` | `http://192.168.1.50:8081` |
-| `KALYX_LEDGER_ID` | No | Ledger identifier submitted to and queried from the anchor service. | `kalyx-main-host` | `kalyx-demo` |
+| `KALYX_LEDGER_ID` | No | Ledger identifier submitted to and queried from the anchor service. | `kalyx-main-host` | `kalyx-local` |
 
 ## Local Example
 
@@ -41,7 +41,7 @@ The host API and CLI use the same anchor configuration:
 
 ```bash
 export KALYX_ANCHOR_URL=http://<pi-ip>:8081
-export KALYX_LEDGER_ID=kalyx-demo
+export KALYX_LEDGER_ID=kalyx-local
 ```
 
 `KALYX_ANCHOR_URL` is read by the host process. It should point from the host running `kalyx-api` to the Raspberry Pi anchor service. Angular does not use this value and should not be configured to call the Pi directly.
@@ -60,7 +60,7 @@ Set `kalyxApi.apiBaseUrl` to `http://127.0.0.1:8000` when Angular and FastAPI ru
 
 ### Multi-Machine / Linux Virtual Machine Setup
 
-Set `kalyxApi.apiBaseUrl` to a host address reachable from the browser. The checked-in configuration points Angular to the Linux host running FastAPI at `http://192.168.64.2:8000`. This address is specific to the current demonstration environment, where the backend runs inside a Linux virtual machine; other multi-machine setups should use their own reachable host API address.
+Set `kalyxApi.apiBaseUrl` to a host address reachable from the browser. The checked-in configuration points Angular to the Linux host running FastAPI at `http://192.168.64.2:8000`. This address is specific to the current development setup, where the backend runs inside a Linux virtual machine; other multi-machine setups should use their own reachable host API address.
 
 In both setups, Angular communicates only with the host FastAPI API. Host-to-Pi anchoring is configured separately with `KALYX_ANCHOR_URL`; Angular must never use the Pi anchor URL.
 
@@ -70,5 +70,5 @@ In both setups, Angular communicates only with the host FastAPI API. Host-to-Pi 
 | `kalyxApi.apiKey` | No | Optional value sent as `X-KALYX-API-Key`; blank sends no API-key header. |
 
 Frontend API configuration is visible to anyone who can inspect the built
-JavaScript bundle. Treat it as local coursework/demo configuration, not secure
+JavaScript bundle. Treat it as public client-side configuration, not secure
 secret storage. Do not use it as a replacement for real user authentication.

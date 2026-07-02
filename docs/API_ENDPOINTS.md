@@ -526,8 +526,8 @@ http://127.0.0.1:8081
 
 | Method | Path | Protection | Description |
 | --- | --- | --- | --- |
-| `POST` | `/anchor` | Unprotected in current prototype | Store a checkpoint boundary in the Pi-side anchor chain |
-| `GET` | `/anchor/latest?ledger_id=...` | Unprotected in current prototype | Return the latest anchor accepted for one ledger, or `404` when none exists |
+| `POST` | `/anchor` | Unprotected in current implementation | Store a checkpoint boundary in the Pi-side anchor chain |
+| `GET` | `/anchor/latest?ledger_id=...` | Unprotected in current implementation | Return the latest anchor accepted for one ledger, or `404` when none exists |
 
 ### POST /anchor
 
@@ -544,4 +544,4 @@ FastAPI request-model failures return HTTP `422` before anchor storage is called
 
 ### GET /anchor/latest
 
-Returns the latest Pi anchor for a ledger ID. This is the endpoint used by host anchor status comparison. It returns HTTP `404` when no anchor exists for the requested ledger. If strict validation finds that the stored Pi anchor chain is invalid, the current prototype fails the request rather than returning an unvalidated boundary.
+Returns the latest Pi anchor for a ledger ID. This is the endpoint used by host anchor status comparison. It returns HTTP `404` when no anchor exists for the requested ledger. If strict validation finds that the stored Pi anchor chain is invalid, the current implementation fails the request rather than returning an unvalidated boundary.

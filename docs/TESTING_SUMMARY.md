@@ -1,6 +1,6 @@
-# Testing Summary
+# Test Coverage
 
-KALYX tests focus on correctness properties that support the project's integrity claims. The suite is intentionally direct: each test category maps to a backend guarantee.
+KALYX tests cover the behaviors behind its integrity checks. Each section below shows what is checked, why it matters, and what is not covered yet.
 
 Run the suite:
 
@@ -31,8 +31,8 @@ npm test
 
 ## Continuous Integration
 
-GitHub Actions runs automated validation on pull requests and pushes to `main`.
-The workflow is intentionally small and only checks the project baseline:
+GitHub Actions runs automated checks on pull requests and pushes to `main`.
+The workflow currently checks the backend and frontend build:
 
 - install backend dependencies with `python3 -m pip install -e . pytest`
 - compile Python sources with `python3 -m compileall kalyx`
@@ -51,7 +51,7 @@ Files:
 - `kalyx/tests/test_ledger_integrity.py`
 - `kalyx/tests/test_ledger_corruption.py`
 
-What they prove:
+Covered behavior:
 
 - A valid ledger record verifies successfully.
 - A modified payload is detected as `HASH_MISMATCH`.
@@ -65,9 +65,7 @@ An integrity ledger is only useful if it can distinguish trusted history from th
 
 ## Tamper Detection Tests
 
-The tamper tests rewrite ledger content after append and then run deterministic verification.
-
-They prove:
+The tamper tests rewrite ledger content after append and then run deterministic verification. They check that:
 
 - stored hashes are not decorative metadata
 - canonical recomputation detects payload edits
@@ -82,7 +80,7 @@ Corruption coverage includes:
 - record hash corruption
 - previous-hash corruption
 
-What they prove:
+Covered behavior:
 
 - malformed ledger content is treated as corruption
 - verification stops at the first corrupted entry
@@ -100,7 +98,7 @@ File:
 
 The concurrency test writes 100 events through a `ThreadPoolExecutor`.
 
-It proves:
+It checks that:
 
 - concurrent writers do not assign duplicate sequence positions
 - concurrent writers do not reuse the same previous hash
@@ -116,13 +114,13 @@ File:
 
 - `kalyx/tests/test_pipeline_validation.py`
 
-The pipeline validation tests prove that KALYX rejects:
+The pipeline validation tests check that KALYX rejects:
 
 - missing required fields
 - invalid PID values
 - blank command names
 
-They also prove that valid structured events flow through the shared pipeline and receive `hash` and `prev_hash` fields.
+They also confirm that valid structured events flow through the shared pipeline and receive `hash` and `prev_hash` fields.
 
 Why it matters:
 
@@ -143,7 +141,7 @@ The detection tests cover:
 - scripted destructive actions in non-interactive sessions
 - interactive scripted activity that should not alert
 
-What they prove:
+Covered behavior:
 
 - rule output is deterministic
 - rules respect time windows and session context
@@ -159,7 +157,7 @@ File:
 
 - `kalyx/tests/test_alert_persistence.py`
 
-The alert persistence tests prove:
+The alert persistence tests cover:
 
 - duplicate alerts are written once
 - distinct alert signatures are preserved
@@ -176,7 +174,7 @@ File:
 - `kalyx/tests/test_checkpoint_integrity.py`
 - `kalyx/tests/test_ingestion_trust_gate.py`
 
-The checkpoint tests prove:
+The checkpoint tests cover:
 
 - valid ledgers can write local checkpoints
 - repeated checkpoint creation for the same ledger boundary is deduplicated
@@ -196,7 +194,7 @@ Files:
 - `kalyx/tests/test_anchor_status.py`
 - `kalyx/tests/test_cli_anchor.py`
 
-The anchor tests prove:
+The anchor tests cover:
 
 - the Raspberry Pi anchor service appends checkpoint boundaries to its own chain
 - duplicate checkpoint submissions return `ALREADY_ANCHORED`
@@ -216,7 +214,7 @@ File:
 
 - `kalyx/tests/test_api_endpoints.py`
 
-The API route tests prove:
+The API route tests cover:
 
 - status routes expose trust-state and checkpoint metadata
 - ingest and verify route handlers share backend state
@@ -236,7 +234,7 @@ File:
 
 - `kalyx/tests/test_api_auth.py`
 
-The API auth tests prove:
+The API auth tests cover:
 
 - operational routes such as `/ingest`, `/verify`, `/detect`, and `/anchor` are protected when `KALYX_API_KEY` is configured
 - read routes such as `/status`, `/alerts`, `/ledger`, and `/anchor/status` remain unprotected
@@ -254,7 +252,7 @@ Files:
 - `frontend/src/app/core/api/kalyx-api.service.spec.ts`
 - `frontend/src/app/core/state/dashboard-state.service.spec.ts`
 
-The Angular tests prove:
+The Angular tests cover:
 
 - configured API keys are attached to protected frontend requests
 - 401 responses produce a clear frontend error message
@@ -262,9 +260,9 @@ The Angular tests prove:
 - Angular does not construct Raspberry Pi anchor API URLs
 - trust-state display mapping does not upgrade backend `UNTRUSTED` states
 
-## Residual Test Gaps
+## Known Test Gaps
 
-Current tests emphasize backend integrity semantics and typed Angular service behavior. They do not claim:
+Current tests emphasize backend integrity behavior and typed Angular service behavior. Not covered yet:
 
 - Angular component and route tests for the operations console
 - formal typed alert schema validation

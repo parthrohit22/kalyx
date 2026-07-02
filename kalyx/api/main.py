@@ -45,7 +45,7 @@ API_KEY_HEADER = "X-KALYX-API-Key"
 
 app = FastAPI(
     title="KALYX API",
-    version="0.6.2",
+    version="0.6.3",
     description="Deterministic tamper-evident execution logging API.",
 )
 

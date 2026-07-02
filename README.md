@@ -8,9 +8,9 @@
 
 **Execution Evidence Integrity System**
 
-**AT3 documentation baseline: KALYX v0.6.2**
-
 KALYX is an execution evidence integrity system for capturing, verifying, and externally anchoring execution history.
+
+KALYX is an early-stage product under active development. It currently runs from a source checkout and is intended for local or controlled environments.
 
 KALYX is not an EDR, SIEM, antivirus, malware blocker, or full host attestation system. It does not prevent attacks. Its purpose is evidence integrity and trust verification.
 
@@ -20,7 +20,7 @@ KALYX is not an EDR, SIEM, antivirus, malware blocker, or full host attestation 
 
 Local logs are useful, but they are not automatically trustworthy.
 
-If an attacker can modify, reorder, truncate, or replace local history, a normal log file may still look plausible. A reviewer may see commands, timestamps, and process names, but not know whether earlier records were changed or deleted.
+If an attacker can modify, reorder, truncate, or replace local history, a normal log file may still look plausible. An investigator may see commands, timestamps, and process names, but not know whether earlier records were changed or deleted.
 
 Evidence integrity matters because investigations depend on continuity:
 
@@ -307,7 +307,7 @@ Open:
 http://127.0.0.1:4200/
 ```
 
-Checked-in frontend API target for the current demonstration environment:
+Checked-in frontend API target for the current development setup:
 
 ```text
 http://192.168.64.2:8000
@@ -319,11 +319,11 @@ Configured in:
 frontend/src/environments/environment.ts
 ```
 
-This address identifies the Linux host running the FastAPI backend inside the current demonstration virtual machine; it is not a permanent deployment requirement.
+This address identifies the Linux host running the FastAPI backend inside the current development virtual machine; it is not a permanent deployment requirement.
 
 The dashboard calls the host FastAPI API for anchor status and anchor submission. It never calls the Raspberry Pi anchor service directly.
 
-For a same-machine setup, change the frontend API target to `http://127.0.0.1:8000`. Demonstration or multi-machine environments must use an address that is reachable from the browser. The Raspberry Pi URL remains backend-only configuration.
+For a same-machine setup, change the frontend API target to `http://127.0.0.1:8000`. Multi-machine environments must use an address that is reachable from the browser. The Raspberry Pi URL remains backend-only configuration.
 
 ---
 
@@ -653,7 +653,7 @@ Frontend configuration is visible in built JavaScript. Do not treat it as secret
 - Verification is O(n) because each ledger record is recomputed in order.
 - Detection uses deterministic rules, not ML or external threat intelligence.
 - Detection currently gates on full-ledger hash-chain verification and does not evaluate local checkpoint continuity.
-- The Raspberry Pi anchor API is unauthenticated in the current prototype and does not issue signed receipts.
+- The Raspberry Pi anchor API is unauthenticated in the current implementation and does not issue signed receipts.
 
 ---
 
@@ -665,7 +665,7 @@ Frontend configuration is visible in built JavaScript. Do not treat it as secret
 - **Raspberry Pi anchor**: provides an independent checkpoint authority without introducing a large distributed system.
 - **Rule-based detection**: explainable, deterministic, and testable.
 - **Thin interfaces**: CLI, API, and Angular call shared backend services instead of duplicating trust logic.
-- **No database**: keeps the prototype inspectable and avoids operational complexity before indexed storage is needed.
+- **No database**: keeps the current system inspectable and avoids operational complexity before indexed storage is needed.
 
 ---
 
@@ -678,20 +678,20 @@ Frontend configuration is visible in built JavaScript. Do not treat it as secret
 | [docs/DETECTION_ENGINE.md](docs/DETECTION_ENGINE.md) | Detection rules, semantics, limitations |
 | [docs/THREAT_MODEL.md](docs/THREAT_MODEL.md) | Trust boundaries and out-of-scope assumptions |
 | [docs/CONFIGURATION.md](docs/CONFIGURATION.md) | Environment and frontend API configuration |
-| [docs/TESTING_SUMMARY.md](docs/TESTING_SUMMARY.md) | Test coverage and validation approach |
-| [DEMO.md](DEMO.md) | End-to-end demonstration workflow |
+| [docs/TESTING_SUMMARY.md](docs/TESTING_SUMMARY.md) | Current automated test coverage and known gaps |
+| [DEMO.md](DEMO.md) | Guided local product walkthrough |
 
 ---
 
-## AT3 Submission
+## Product Status
 
-Submit the executable KALYX v0.6.2 prototype as a source-code ZIP. An installable package is not required. Exclude `.venv`, `node_modules`, and build artefacts; runtime logs and anchor data are demonstration data rather than distributable artefacts.
+KALYX is currently distributed as source and is not yet packaged as a production service. The working product includes the host API, CLI, Angular dashboard, local integrity services, and Raspberry Pi anchor service described above. Security hardening, deployment automation, and scalable storage remain active product work.
 
 ---
 
 ## Roadmap
 
-Future work that is not implemented in the current repository:
+Planned product work:
 
 - Signed checkpoint exchange between host and anchor
 - Ledger segmentation and incremental verification

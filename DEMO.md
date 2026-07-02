@@ -1,10 +1,10 @@
-# KALYX Demo Guide
+# KALYX Local Walkthrough
 
-AT3 documentation baseline: **KALYX v0.6.2**.
+Use this walkthrough to run the current product locally and check its main workflows.
 
-## 1. Purpose
+## 1. What You Will Check
 
-This guide demonstrates the working KALYX prototype end-to-end: ingest execution evidence, verify the hash-chained ledger, create checkpoints, anchor checkpoint boundaries, inspect anchor status, detect tampering, and run detection.
+You will ingest execution evidence, verify the hash-chained ledger, create checkpoints, anchor checkpoint boundaries, inspect anchor status, check tamper detection, and run detection.
 
 ## 2. Prerequisites
 
@@ -17,7 +17,7 @@ This guide demonstrates the working KALYX prototype end-to-end: ingest execution
 
 See `README.md` and `docs/` for full setup details.
 
-## 3. Demo Topology
+## 3. Local Topology
 
 ```text
 Browser / Angular Dashboard
@@ -33,9 +33,9 @@ Raspberry Pi Anchor Authority
 
 Angular talks only to the Host FastAPI API. It does not call the Raspberry Pi anchor directly. The Pi anchor may be run locally for testing.
 
-### AT3 Addressing Note
+### Checked-In Network Setup
 
-The checked-in frontend configuration points Angular to the Linux host running the FastAPI backend at `http://192.168.64.2:8000`. This address is used for the current demonstration environment because the backend runs inside a Linux virtual machine. The host backend reaches the Raspberry Pi through `KALYX_ANCHOR_URL`.
+The checked-in frontend configuration points Angular to the Linux host running the FastAPI backend at `http://192.168.64.2:8000`. This address belongs to the current development setup, where the backend runs inside a Linux virtual machine. The host backend reaches the Raspberry Pi through `KALYX_ANCHOR_URL`.
 
 `frontend/src/environments/environment.ts` controls Angular-to-host communication. `KALYX_ANCHOR_URL` controls host-to-Pi communication. Angular should never be pointed at the Raspberry Pi anchor API.
 
@@ -68,7 +68,7 @@ cd ~/kalyx/frontend
 npm start
 ```
 
-AT3 service addresses:
+Service addresses:
 
 - Host API: `http://<host-ip>:8000`
 - Raspberry Pi Anchor API: `http://<pi-ip>:8081`
@@ -101,7 +101,7 @@ kalyx status
 kalyx verify
 ```
 
-Expected result: KALYX reports `VERIFIED`, `EMPTY`, or `NO_LEDGER` depending on current local state. The command should not crash with an unhandled exception.
+You should see `VERIFIED`, `EMPTY`, or `NO_LEDGER`, depending on the current local state.
 
 ## 6. Ingest And Verify Evidence
 
@@ -131,7 +131,7 @@ kalyx anchor --anchor-url http://<anchor-host>:8081 --ledger-id kalyx-demo
 kalyx anchor-status --anchor-url http://<anchor-host>:8081 --ledger-id kalyx-demo
 ```
 
-Expected result:
+You should see:
 
 ```text
 Anchor Status : MATCH
@@ -147,9 +147,9 @@ Dashboard route:
 
 Verification creates or reuses the latest safe local checkpoint; it does not anchor that checkpoint automatically. `Anchor Latest Checkpoint` sends the checkpoint through the Host FastAPI API and host anchor client. `MATCH` means the local and Pi checkpoint indices and hashes agree.
 
-## 8. Demonstrate State Change
+## 8. Check The Anchor Lifecycle
 
-Strongest anchor lifecycle:
+Anchor lifecycle:
 
 ```text
 MATCH
@@ -173,7 +173,7 @@ kalyx anchor-status --anchor-url http://<anchor-host>:8081 --ledger-id kalyx-dem
 
 After the new checkpoint is created but before it is anchored, `anchor-status` should report `AHEAD`. After anchoring, it should return to `MATCH`.
 
-## 9. Demonstrate Tamper Detection
+## 9. Check Tamper Detection
 
 Back up the ledger, tamper with one record, verify that KALYX detects the problem, then restore the backup.
 
@@ -202,7 +202,7 @@ rm logs/exec_chain.jsonl.demo.bak
 kalyx verify
 ```
 
-Expected result: verification fails or reports an untrusted boundary while tampered, then returns to the restored ledger state after the backup is copied back.
+Verification should fail or report an untrusted boundary while the ledger is modified, then return to the restored state after the backup is copied back.
 
 ## 10. Run Detection
 
@@ -211,9 +211,9 @@ kalyx detect
 kalyx alerts
 ```
 
-Detection skips when full-ledger hash-chain verification fails. It does not currently evaluate checkpoint continuity, so use `/status` or the Overview screen separately when demonstrating checkpoint trust state.
+Detection skips when full-ledger hash-chain verification fails. It does not currently evaluate checkpoint continuity, so use `/status` or the Overview screen separately when checking checkpoint trust state.
 
-## 11. Expected Success Signals
+## 11. Completion Checklist
 
 - Backend starts.
 - Frontend serves in the browser.
@@ -236,7 +236,7 @@ Detection skips when full-ledger hash-chain verification fails. It does not curr
 
 ## 13. Cleanup
 
-If you ran the tamper demo, restore the backup if it still exists:
+If you ran the tamper check, restore the backup if it still exists:
 
 ```bash
 test -f logs/exec_chain.jsonl.demo.bak && cp logs/exec_chain.jsonl.demo.bak logs/exec_chain.jsonl
@@ -245,8 +245,4 @@ rm -f logs/exec_chain.jsonl.demo.bak
 
 Stop services with `Ctrl+C` in each terminal.
 
-No destructive reset is required for the AT3 demonstration. Preserve runtime evidence and Pi anchor data until the walkthrough and submission checks are complete. Do not delete `logs/`, `reports/`, or `anchors/` as part of the normal demo procedure.
-
-## 14. AT3 Source ZIP
-
-Submit the executable KALYX prototype as a source-code ZIP. No installable package is required. Exclude virtual environments, `node_modules`, build output, caches, and runtime demonstration data.
+Runtime evidence and Pi anchor data can be useful for later inspection. Keep `logs/`, `reports/`, and `anchors/` unless you intentionally want a clean local state.

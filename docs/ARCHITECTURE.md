@@ -1,6 +1,6 @@
 # KALYX Architecture
 
-KALYX v0.6.2 is organized as an integrity and anchoring workflow with thin interfaces. The core design goal is to keep verification, chaining, ingestion, detection, and anchor semantics in shared services so the CLI, FastAPI API, and Angular operations console all reflect the same backend behaviour.
+KALYX v0.6.3 is organized as an integrity and anchoring workflow with thin interfaces. The core design goal is to keep verification, chaining, ingestion, detection, and anchor semantics in shared services so the CLI, FastAPI API, and Angular operations console all reflect the same backend behaviour.
 
 ## Layered Architecture
 
@@ -106,7 +106,7 @@ raw_line or event
 
 The API, CLI, and Angular frontend do not implement their own ledger logic. They call or display results from `ingest_payload`, `verify_ledger_state`, `create_checkpoint`, `get_status_summary`, `detect_and_persist_alerts`, `load_ledger_records`, `load_alerts`, `submit_latest_checkpoint_to_anchor`, and `compare_anchor_status`.
 
-The Angular console is the primary local demo interface, but it remains a presentation layer. It calls FastAPI endpoints for status, verification, ingestion, detection, alert retrieval, ledger inspection, anchor status, and anchor submission. It never decides whether evidence is trusted, and it never calls the Raspberry Pi anchor service directly.
+The Angular console is the primary local operations interface, but it remains a presentation layer. It calls FastAPI endpoints for status, verification, ingestion, detection, alert retrieval, ledger inspection, anchor status, and anchor submission. It never decides whether evidence is trusted, and it never calls the Raspberry Pi anchor service directly.
 
 ## Trust Boundaries
 
@@ -218,7 +218,7 @@ KALYX distinguishes corruption classes:
 - `PREV_HASH_MISMATCH`: the chain link does not point to the expected previous hash.
 - `HASH_MISMATCH`: the record payload no longer matches its stored hash.
 
-This gives reviewers an exact corruption boundary rather than a vague pass/fail result.
+This gives operators an exact corruption boundary rather than a vague pass/fail result.
 
 ## Detection Separation
 

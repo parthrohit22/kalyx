@@ -22,7 +22,7 @@ Within the current model, KALYX trusts:
 - validation, canonical hashing, and verification code
 - process metadata read from `/proc` as best-effort local context
 
-These are engineering assumptions for a local integrity project, not host-compromise guarantees.
+These are engineering assumptions for the current local deployment model, not host-compromise guarantees.
 
 ## Untrusted Components
 
@@ -31,7 +31,7 @@ KALYX treats these as untrusted or only partially trusted:
 - raw execsnoop lines
 - structured API ingestion payloads
 - sample log contents
-- Angular-console-submitted test events
+- Angular-console-submitted events
 - malformed ledger lines
 - persisted alerts loaded from disk
 - event source truthfulness
@@ -107,7 +107,7 @@ Anchor Chain
 
 The host verifies its ledger and creates local checkpoint boundaries. The host anchor client submits those boundaries to the Raspberry Pi API, which stores them in `anchors/anchor_chain.jsonl` as a separate hash chain. Later, the host compares its latest local checkpoint with the latest Pi anchor and reports `MATCH`, `AHEAD`, `BEHIND`, `DIVERGENCE`, `NO_ANCHOR`, or `UNREACHABLE`.
 
-The Pi is an independent storage and comparison boundary, not an event-verification authority. It validates the structure and continuity of its own anchor chain, but it does not receive or independently validate every host event. It does not attest the host, prove event authenticity, prevent full host compromise, or issue signed anchor receipts. The current prototype anchor API is also unauthenticated, so network access and deployment controls remain outside KALYX's guarantees.
+The Pi is an independent storage and comparison boundary, not an event-verification authority. It validates the structure and continuity of its own anchor chain, but it does not receive or independently validate every host event. It does not attest the host, prove event authenticity, prevent full host compromise, or issue signed anchor receipts. The current anchor API is also unauthenticated, so network access and deployment controls remain outside KALYX's guarantees.
 
 ## Replay Assumptions
 
@@ -179,4 +179,4 @@ KALYX provides local deterministic verification of accepted records under the st
 KALYX does not guarantee authenticity of the original event source.
 ```
 
-That sentence is the core boundary. The design keeps this explicit so the project remains honest and reviewable.
+That sentence is the core boundary. The design keeps it explicit so product guarantees remain clear and limited.

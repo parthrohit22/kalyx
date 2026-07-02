@@ -10,7 +10,7 @@ Rule-based detection was chosen because it is:
 - easy to test
 - easy to explain
 - stable across repeated runs
-- suitable for a small integrity-focused backend project
+- suitable for an early-stage integrity product
 
 KALYX intentionally avoids ML, external threat intelligence, and opaque scoring. Those would add claims and dependencies that do not match the current trust boundary.
 
@@ -162,7 +162,7 @@ This protects against duplicate writes during repeated or concurrent detection r
 
 ## Explainability
 
-Each alert includes a human-readable `details` field plus sequence and timestamp boundaries. Reviewers can map an alert back to the exact ledger range that produced it.
+Each alert includes a human-readable `details` field plus sequence and timestamp boundaries. Operators can map an alert back to the exact ledger range that produced it.
 
 Example:
 

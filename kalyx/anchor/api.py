@@ -12,7 +12,7 @@ from kalyx.anchor.storage import anchor_checkpoint, load_latest_anchor
 
 app = FastAPI(
     title="KALYX Raspberry Pi Anchor",
-    version="0.6.2",
+    version="0.6.3",
     description="Independent checkpoint anchor authority for KALYX.",
 )
 
