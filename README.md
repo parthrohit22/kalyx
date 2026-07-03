@@ -699,3 +699,26 @@ Planned product work:
 - Indexed alert and replay storage
 - Stronger Raspberry Pi anchor hardening
 - Browser-based Angular test coverage in CI
+
+---
+
+## 📘 KALYX Learn
+
+Want a deeper understanding of how KALYX works? Explore KALYX Learn, an interactive documentation site covering the platform architecture, execution evidence model, integrity verification workflow, trust model, Raspberry Pi anchoring, detection engine, APIs, roadmap, and future vision.
+
+🌐 **Visit KALYX Learn**
+https://kalyx-8s5v.vercel.app/
+
+The site includes:
+
+- System Architecture
+- Execution Workflow
+- Trust Model
+- Verification & Detection
+- Raspberry Pi External Anchoring
+- API Documentation
+- Security Boundaries
+- Product Roadmap
+- Future Enhancements
+
+If you’re evaluating KALYX or contributing to the project, KALYX Learn is the best place to understand the platform before exploring the source code.
