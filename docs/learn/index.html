@@ -1,0 +1,1230 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>KALYX Learn — Execution Evidence Integrity Platform</title>
+  <meta name="description" content="Learn how KALYX captures, verifies, checkpoints, and externally anchors execution evidence while keeping its trust boundary explicit.">
+  <meta name="keywords" content="KALYX, execution evidence, evidence integrity, hash-chained ledger, deterministic verification, Raspberry Pi anchor, cybersecurity">
+  <meta name="author" content="KALYX">
+  <meta name="theme-color" content="#050816">
+  <meta property="og:type" content="website">
+  <meta property="og:site_name" content="KALYX">
+  <meta property="og:title" content="KALYX — Execution Evidence Integrity Platform">
+  <meta property="og:description" content="Know when execution history can no longer be trusted.">
+  <meta property="og:url" content="https://parthrohit22.github.io/kalyx/learn/">
+  <meta name="twitter:card" content="summary">
+  <meta name="twitter:title" content="KALYX — Execution Evidence Integrity Platform">
+  <meta name="twitter:description" content="Know when execution history can no longer be trusted.">
+  <!-- Replace this placeholder when the final Netlify, Vercel, or other production URL is known. -->
+  <link rel="canonical" href="https://parthrohit22.github.io/kalyx/learn/">
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #050816;
+      --surface: #0b1220;
+      --card: #111827;
+      --border: #1e293b;
+      --primary: #14b8a6;
+      --accent: #22d3ee;
+      --success: #22c55e;
+      --warning: #f59e0b;
+      --danger: #ef4444;
+      --text: #f9fafb;
+      --muted: #94a3b8;
+      --soft: #cbd5e1;
+      --nav-height: 72px;
+      --radius: 18px;
+      --shadow: 0 24px 80px rgba(0, 0, 0, .34);
+      --max: 1180px;
+    }
+
+    *, *::before, *::after { box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+    body {
+      margin: 0;
+      min-width: 320px;
+      background:
+        radial-gradient(circle at 12% 8%, rgba(20, 184, 166, .11), transparent 27rem),
+        radial-gradient(circle at 88% 25%, rgba(34, 211, 238, .08), transparent 30rem),
+        var(--bg);
+      color: var(--text);
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      line-height: 1.6;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    body::before {
+      position: fixed;
+      inset: 0;
+      z-index: -1;
+      content: "";
+      pointer-events: none;
+      opacity: .22;
+      background-image:
+        linear-gradient(rgba(148, 163, 184, .03) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(148, 163, 184, .03) 1px, transparent 1px);
+      background-size: 48px 48px;
+      mask-image: linear-gradient(to bottom, black, transparent 72%);
+    }
+
+    a { color: inherit; }
+    button, a { -webkit-tap-highlight-color: transparent; }
+    button { font: inherit; }
+    img, svg { display: block; max-width: 100%; }
+    p, ul { margin-top: 0; }
+    code, .mono {
+      font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+    }
+
+    :focus-visible {
+      outline: 3px solid var(--accent);
+      outline-offset: 4px;
+    }
+
+    .skip-link {
+      position: fixed;
+      top: 12px;
+      left: 12px;
+      z-index: 100;
+      padding: .75rem 1rem;
+      border-radius: 10px;
+      background: var(--text);
+      color: var(--bg);
+      transform: translateY(-150%);
+      transition: transform .2s ease;
+    }
+    .skip-link:focus { transform: translateY(0); }
+
+    .container { width: min(calc(100% - 40px), var(--max)); margin-inline: auto; }
+    .section {
+      position: relative;
+      padding: 104px 0;
+      scroll-margin-top: calc(var(--nav-height) + 24px);
+    }
+    .section-tight { padding-top: 36px; }
+    .section-head { max-width: 770px; margin-bottom: 48px; }
+    .eyebrow {
+      display: inline-flex;
+      align-items: center;
+      gap: .55rem;
+      margin-bottom: 1rem;
+      color: var(--accent);
+      font-size: .76rem;
+      font-weight: 800;
+      letter-spacing: .16em;
+      text-transform: uppercase;
+    }
+    .eyebrow::before { width: 24px; height: 1px; content: ""; background: currentColor; }
+    h1, h2, h3 { margin: 0; line-height: 1.08; letter-spacing: -.035em; }
+    h1 { font-size: clamp(4rem, 11vw, 8.5rem); }
+    h2 { font-size: clamp(2.3rem, 5vw, 4.5rem); }
+    h3 { font-size: 1.18rem; letter-spacing: -.018em; }
+    .lede { margin: 1.3rem 0 0; color: var(--soft); font-size: clamp(1.05rem, 2vw, 1.25rem); }
+    .muted { color: var(--muted); }
+    .micro { color: var(--muted); font-size: .82rem; }
+    .accent { color: var(--accent); }
+
+    .site-header {
+      position: sticky;
+      top: 0;
+      z-index: 50;
+      height: var(--nav-height);
+      border-bottom: 1px solid rgba(30, 41, 59, .7);
+      background: rgba(5, 8, 22, .78);
+      backdrop-filter: blur(18px);
+    }
+    .nav-wrap { display: flex; align-items: center; justify-content: space-between; height: 100%; }
+    .brand {
+      display: inline-flex;
+      align-items: center;
+      gap: .75rem;
+      color: var(--text);
+      font-weight: 900;
+      letter-spacing: .08em;
+      text-decoration: none;
+    }
+    .brand-mark {
+      position: relative;
+      width: 32px;
+      height: 32px;
+      border: 1px solid rgba(34, 211, 238, .6);
+      border-radius: 9px;
+      background: linear-gradient(135deg, rgba(20, 184, 166, .25), rgba(34, 211, 238, .05));
+      box-shadow: inset 0 0 20px rgba(34, 211, 238, .08);
+    }
+    .brand-mark::before,
+    .brand-mark::after { position: absolute; content: ""; background: var(--accent); }
+    .brand-mark::before { top: 8px; left: 8px; width: 14px; height: 2px; box-shadow: 0 7px 0 var(--primary); }
+    .brand-mark::after { top: 8px; right: 8px; width: 2px; height: 16px; opacity: .65; }
+    .nav-links { display: flex; align-items: center; gap: .18rem; }
+    .nav-links a {
+      padding: .55rem .72rem;
+      border-radius: 8px;
+      color: var(--muted);
+      font-size: .82rem;
+      font-weight: 650;
+      text-decoration: none;
+      transition: color .2s ease, background .2s ease;
+    }
+    .nav-links a:hover,
+    .nav-links a[aria-current="location"] { background: rgba(20, 184, 166, .09); color: var(--text); }
+    .nav-links .nav-github { margin-left: .3rem; border: 1px solid var(--border); color: var(--soft); }
+    .menu-toggle {
+      display: none;
+      width: 42px;
+      height: 42px;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      background: var(--surface);
+      color: var(--text);
+      cursor: pointer;
+    }
+    .menu-toggle span,
+    .menu-toggle::before,
+    .menu-toggle::after { display: block; width: 18px; height: 2px; margin: 4px auto; content: ""; background: currentColor; }
+
+    .hero { min-height: calc(100vh - var(--nav-height)); display: grid; place-items: center; padding: 80px 0 70px; }
+    .hero-grid { display: grid; grid-template-columns: 1.02fr .98fr; gap: 56px; align-items: center; }
+    .hero-kicker {
+      display: inline-flex;
+      align-items: center;
+      gap: .7rem;
+      margin-bottom: 1.1rem;
+      color: var(--primary);
+      font-weight: 800;
+      letter-spacing: .14em;
+      text-transform: uppercase;
+    }
+    .hero-kicker .pulse-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--success); box-shadow: 0 0 0 7px rgba(34, 197, 94, .1); }
+    .hero-subtitle { margin: .1rem 0 1.25rem; color: var(--accent); font-size: clamp(1.15rem, 2.3vw, 1.55rem); font-weight: 700; }
+    .hero-tagline { max-width: 650px; margin-bottom: 1rem; color: var(--text); font-size: clamp(1.55rem, 3vw, 2.25rem); font-weight: 760; letter-spacing: -.025em; line-height: 1.18; }
+    .hero-copy { max-width: 660px; color: var(--muted); font-size: 1.04rem; }
+    .button-row { display: flex; flex-wrap: wrap; gap: .75rem; margin-top: 2rem; }
+    .button {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: .5rem;
+      min-height: 44px;
+      padding: .72rem 1rem;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      background: rgba(11, 18, 32, .72);
+      color: var(--soft);
+      font-size: .86rem;
+      font-weight: 750;
+      text-decoration: none;
+      transition: transform .2s ease, border-color .2s ease, background .2s ease;
+    }
+    .button:hover { transform: translateY(-2px); border-color: #334155; background: var(--card); }
+    .button-primary { border-color: transparent; background: linear-gradient(135deg, var(--primary), #0f9f96); color: #021513; box-shadow: 0 12px 35px rgba(20, 184, 166, .22); }
+    .button-primary:hover { border-color: transparent; background: linear-gradient(135deg, #2dd4bf, var(--primary)); }
+    .button svg { width: 15px; height: 15px; }
+
+    .hero-visual {
+      position: relative;
+      overflow: hidden;
+      border: 1px solid rgba(34, 211, 238, .18);
+      border-radius: 26px;
+      background: linear-gradient(145deg, rgba(17, 24, 39, .9), rgba(5, 8, 22, .96));
+      box-shadow: var(--shadow), inset 0 1px 0 rgba(255,255,255,.04);
+    }
+    .hero-visual::before { position: absolute; inset: 0; content: ""; pointer-events: none; background: radial-gradient(circle at 70% 20%, rgba(34,211,238,.1), transparent 38%); }
+    .hero-visual svg { width: 100%; height: auto; }
+    .flow-path { stroke-dasharray: 8 12; animation: dash 8s linear infinite; }
+    .flow-particle { animation: flowPulse 3.4s ease-in-out infinite; }
+    .flow-particle.delay { animation-delay: 1.1s; }
+    .verified-signal { animation: signalFade 5.2s ease-in-out infinite; }
+    .tampered-signal { animation: signalRise 5.2s ease-in-out infinite; }
+    @keyframes dash { to { stroke-dashoffset: -160; } }
+    @keyframes flowPulse { 0%,100% { opacity: .25; } 50% { opacity: 1; } }
+    @keyframes signalFade { 0%,42% { opacity: 1; } 58%,90% { opacity: .22; } }
+    @keyframes signalRise { 0%,42% { opacity: .16; } 58%,90% { opacity: 1; } }
+
+    .card {
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      background: linear-gradient(145deg, rgba(17, 24, 39, .92), rgba(11, 18, 32, .84));
+      box-shadow: inset 0 1px 0 rgba(255,255,255,.025);
+    }
+    .card-hover { transition: transform .25s ease, border-color .25s ease, box-shadow .25s ease; }
+    .card-hover:hover { transform: translateY(-4px); border-color: rgba(34, 211, 238, .28); box-shadow: 0 18px 50px rgba(0,0,0,.2); }
+    .grid-2 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 20px; }
+    .grid-3 { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 18px; }
+
+    .problem-questions { display: grid; gap: 10px; margin-top: 28px; padding: 0; list-style: none; }
+    .problem-questions li { display: flex; gap: .8rem; align-items: flex-start; color: var(--soft); }
+    .problem-questions li::before { flex: 0 0 auto; margin-top: .65rem; width: 6px; height: 6px; border-radius: 50%; content: ""; background: var(--accent); box-shadow: 0 0 12px rgba(34,211,238,.6); }
+    .comparison { padding: 22px; }
+    .comparison-label { margin-bottom: 1rem; color: var(--muted); font-size: .75rem; font-weight: 800; letter-spacing: .12em; text-transform: uppercase; }
+    .log-window { overflow: hidden; border: 1px solid var(--border); border-radius: 13px; background: #070b14; }
+    .window-bar { display: flex; gap: 6px; padding: 10px 12px; border-bottom: 1px solid var(--border); }
+    .window-bar i { width: 7px; height: 7px; border-radius: 50%; background: #334155; }
+    .log-lines { display: grid; gap: .65rem; padding: 18px; }
+    .log-line { height: 7px; border-radius: 99px; background: #172033; }
+    .log-line:nth-child(2) { width: 78%; }
+    .log-line:nth-child(3) { width: 92%; }
+    .result-line { display: flex; align-items: center; justify-content: space-between; gap: 1rem; margin-top: 18px; padding: 13px 14px; border-radius: 10px; background: rgba(148,163,184,.06); }
+    .result-line strong { font-family: "SFMono-Regular", Consolas, monospace; font-size: .84rem; }
+    .result-normal { color: var(--muted); }
+    .result-danger { border: 1px solid rgba(239,68,68,.25); background: rgba(239,68,68,.08); color: #fca5a5; }
+
+    .feature-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
+    .feature-card { min-height: 180px; padding: 22px; }
+    .feature-number { display: inline-flex; align-items: center; justify-content: center; width: 36px; height: 28px; margin-bottom: 1.2rem; border: 1px solid rgba(34,211,238,.18); border-radius: 8px; background: rgba(34,211,238,.06); color: var(--accent); font-size: .72rem; font-weight: 850; }
+    .feature-card p { margin: .7rem 0 0; color: var(--muted); font-size: .91rem; }
+
+    .architecture-shell { padding: 24px; }
+    .diagram-topline { display: flex; align-items: center; justify-content: space-between; gap: 1rem; margin-bottom: 20px; }
+    .diagram-label { color: var(--muted); font-size: .78rem; font-weight: 800; letter-spacing: .1em; text-transform: uppercase; }
+    .diagram-help { color: var(--muted); font-size: .78rem; }
+    .architecture-svg { width: 100%; border-radius: 14px; background: linear-gradient(180deg, rgba(5,8,22,.75), rgba(11,18,32,.4)); }
+    .architecture-svg .layer { fill: rgba(11,18,32,.7); stroke: #1e293b; stroke-width: 1.4; }
+    .architecture-svg .layer-title { fill: #64748b; font-size: 13px; font-weight: 800; letter-spacing: 1.5px; }
+    .architecture-svg .node-box { fill: #111827; stroke: #334155; stroke-width: 1.5; transition: fill .2s ease, stroke .2s ease, filter .2s ease; }
+    .architecture-svg .node-title { fill: #f9fafb; font-size: 14px; font-weight: 760; pointer-events: none; }
+    .architecture-svg .node-sub { fill: #94a3b8; font-size: 10.5px; pointer-events: none; }
+    .architecture-svg .connector { fill: none; stroke: #334155; stroke-width: 1.6; marker-end: url(#arrow); }
+    .architecture-svg .connector.accent-line { stroke: #14b8a6; stroke-dasharray: 7 7; }
+    .architecture-svg .arch-node { cursor: default; outline: none; }
+    .architecture-svg .arch-node:hover .node-box,
+    .architecture-svg .arch-node:focus .node-box { fill: #102a2c; stroke: #22d3ee; filter: url(#nodeGlow); }
+    .diagram-detail { min-height: 78px; margin-top: 16px; padding: 16px 18px; border-left: 3px solid var(--primary); border-radius: 0 10px 10px 0; background: rgba(20,184,166,.055); color: var(--soft); }
+    .diagram-detail strong { color: var(--text); }
+    .architecture-notes { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-top: 18px; }
+    .architecture-note { padding: 15px; border: 1px solid var(--border); border-radius: 12px; color: var(--muted); font-size: .86rem; }
+
+    .workflow-viewport { overflow-x: auto; padding: 12px 4px 28px; scrollbar-color: var(--primary) var(--surface); }
+    .workflow-track { position: relative; display: grid; grid-template-columns: repeat(12, 164px); gap: 14px; width: max-content; min-width: 100%; }
+    .workflow-track::before { position: absolute; top: 31px; right: 70px; left: 70px; height: 2px; content: ""; background: linear-gradient(90deg, var(--primary), var(--accent), var(--success)); opacity: .45; }
+    .workflow-progress { position: absolute; top: 26px; left: 60px; z-index: 2; width: 12px; height: 12px; border: 2px solid var(--bg); border-radius: 50%; background: var(--accent); box-shadow: 0 0 18px var(--accent); animation: workflowMove 12s ease-in-out infinite; }
+    @keyframes workflowMove { 0% { left: 60px; } 50%,100% { left: calc(100% - 72px); } }
+    .workflow-step { position: relative; z-index: 3; padding-top: 55px; }
+    .workflow-dot { position: absolute; top: 22px; left: 50%; width: 18px; height: 18px; border: 4px solid var(--bg); border-radius: 50%; background: var(--primary); transform: translateX(-50%); box-shadow: 0 0 0 1px rgba(20,184,166,.45); }
+    .workflow-card { height: 100%; min-height: 148px; padding: 16px; border: 1px solid var(--border); border-radius: 14px; background: rgba(11,18,32,.93); }
+    .workflow-index { color: var(--accent); font-size: .68rem; font-weight: 900; letter-spacing: .12em; }
+    .workflow-card h3 { margin-top: .55rem; font-size: .98rem; }
+    .workflow-card p { margin: .6rem 0 0; color: var(--muted); font-size: .8rem; line-height: 1.5; }
+
+    .trust-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+    .trust-card { padding: 26px; }
+    .trust-card h3 { display: flex; align-items: center; gap: .65rem; margin-bottom: 1.2rem; }
+    .trust-card h3::before { width: 10px; height: 10px; border-radius: 50%; content: ""; }
+    .can h3::before { background: var(--success); box-shadow: 0 0 14px rgba(34,197,94,.45); }
+    .cannot h3::before { background: var(--warning); box-shadow: 0 0 14px rgba(245,158,11,.4); }
+    .check-list { display: grid; gap: .75rem; padding: 0; list-style: none; }
+    .check-list li { position: relative; padding-left: 1.4rem; color: var(--soft); font-size: .91rem; }
+    .check-list li::before { position: absolute; left: 0; content: "—"; color: var(--primary); }
+    .cannot .check-list li::before { color: var(--warning); }
+    .boundary-quote { margin: 24px 0 0; padding: 26px; border: 1px solid rgba(34,211,238,.2); border-radius: 16px; background: linear-gradient(90deg, rgba(20,184,166,.09), rgba(34,211,238,.035)); color: var(--text); font-size: clamp(1.15rem, 2.2vw, 1.55rem); font-weight: 730; letter-spacing: -.02em; }
+    .boundary-quote span { display: block; margin-top: .6rem; color: var(--muted); font-size: .9rem; font-weight: 500; letter-spacing: normal; }
+
+    .state-grid { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 12px; }
+    .state-card { padding: 18px; }
+    .badge { display: inline-flex; align-items: center; gap: .42rem; padding: .37rem .58rem; border: 1px solid currentColor; border-radius: 999px; font-family: "SFMono-Regular", Consolas, monospace; font-size: .68rem; font-weight: 800; letter-spacing: .04em; }
+    .badge::before { width: 6px; height: 6px; border-radius: 50%; content: ""; background: currentColor; }
+    .badge-success { color: #4ade80; background: rgba(34,197,94,.07); }
+    .badge-warning { color: #fbbf24; background: rgba(245,158,11,.07); }
+    .badge-danger { color: #f87171; background: rgba(239,68,68,.07); }
+    .badge-neutral { color: #94a3b8; background: rgba(148,163,184,.07); }
+    .badge-accent { color: #67e8f9; background: rgba(34,211,238,.07); }
+    .state-card p { margin: 1rem 0 0; color: var(--muted); font-size: .82rem; }
+    .nuance-callout { display: grid; grid-template-columns: auto 1fr; gap: 14px; margin-top: 20px; padding: 20px; border: 1px solid rgba(245,158,11,.2); border-radius: 14px; background: rgba(245,158,11,.055); }
+    .nuance-callout .icon { color: var(--warning); font-weight: 900; }
+    .nuance-callout p { margin: 0; color: var(--soft); font-size: .91rem; }
+
+    .anchor-layout { display: grid; grid-template-columns: .86fr 1.14fr; gap: 24px; align-items: stretch; }
+    .anchor-copy { padding: 28px; }
+    .anchor-copy p { color: var(--muted); }
+    .reason-list { display: grid; gap: 10px; padding: 0; list-style: none; }
+    .reason-list li { padding: 12px 13px; border: 1px solid var(--border); border-radius: 10px; color: var(--soft); font-size: .88rem; }
+    .anchor-flow { padding: 26px; }
+    .mini-flow { display: grid; grid-template-columns: 1fr auto 1fr auto 1fr; align-items: center; gap: 10px; margin: 22px 0; }
+    .mini-node { padding: 16px 10px; border: 1px solid var(--border); border-radius: 12px; background: var(--surface); text-align: center; }
+    .mini-node strong { display: block; font-size: .84rem; }
+    .mini-node span { color: var(--muted); font-size: .72rem; }
+    .mini-arrow { color: var(--primary); font-size: 1.2rem; }
+    .field-cloud { display: flex; flex-wrap: wrap; gap: 8px; }
+    .field-cloud code { padding: .42rem .58rem; border: 1px solid var(--border); border-radius: 8px; background: #080d18; color: var(--soft); font-size: .74rem; }
+    .status-columns { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; margin-top: 24px; }
+    .status-panel { padding: 22px; }
+    .status-panel h3 { margin-bottom: 1rem; }
+    .status-list { display: flex; flex-wrap: wrap; gap: 8px; }
+    .status-token { padding: .38rem .55rem; border: 1px solid var(--border); border-radius: 8px; background: rgba(5,8,22,.6); color: var(--soft); font-family: "SFMono-Regular", Consolas, monospace; font-size: .72rem; }
+
+    .console-shell { overflow: hidden; border: 1px solid #26344a; border-radius: 20px; background: #080d18; box-shadow: var(--shadow); }
+    .console-bar { display: flex; align-items: center; justify-content: space-between; gap: 1rem; padding: 12px 16px; border-bottom: 1px solid var(--border); background: #0b1220; }
+    .console-dots { display: flex; gap: 6px; }
+    .console-dots i { width: 8px; height: 8px; border-radius: 50%; background: #334155; }
+    .preview-label { padding: .3rem .52rem; border: 1px solid rgba(34,211,238,.22); border-radius: 999px; color: var(--accent); font-size: .67rem; font-weight: 850; letter-spacing: .1em; text-transform: uppercase; }
+    .console-body { display: grid; grid-template-columns: 210px 1fr; min-height: 460px; }
+    .console-tabs { display: flex; flex-direction: column; gap: 5px; padding: 18px 12px; border-right: 1px solid var(--border); background: #090e19; }
+    .console-tab { width: 100%; padding: .75rem .8rem; border: 0; border-radius: 8px; background: transparent; color: var(--muted); text-align: left; cursor: pointer; }
+    .console-tab:hover { color: var(--text); background: rgba(148,163,184,.05); }
+    .console-tab[aria-selected="true"] { background: rgba(20,184,166,.11); color: #5eead4; }
+    .console-content { padding: 26px; }
+    .console-panel[hidden] { display: none; }
+    .preview-head { display: flex; justify-content: space-between; gap: 1rem; align-items: flex-start; margin-bottom: 22px; }
+    .preview-head p { margin: .5rem 0 0; color: var(--muted); font-size: .85rem; }
+    .preview-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+    .mock-box { min-height: 100px; padding: 15px; border: 1px solid var(--border); border-radius: 12px; background: linear-gradient(145deg, #0d1525, #0a101c); }
+    .mock-box.wide { grid-column: span 2; }
+    .mock-label { color: var(--muted); font-size: .68rem; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; }
+    .mock-value { margin-top: .75rem; color: var(--soft); font-family: "SFMono-Regular", Consolas, monospace; font-size: .85rem; }
+    .mock-lines { display: grid; gap: 8px; margin-top: 14px; }
+    .mock-lines i { height: 6px; border-radius: 999px; background: #1a2639; }
+    .mock-lines i:nth-child(2) { width: 74%; }
+    .mock-lines i:nth-child(3) { width: 88%; }
+
+    .api-grid { display: grid; grid-template-columns: 1.35fr .65fr; gap: 20px; }
+    .terminal { overflow: hidden; border: 1px solid var(--border); border-radius: 16px; background: #070b13; }
+    .terminal-head { padding: 12px 16px; border-bottom: 1px solid var(--border); color: var(--muted); font-size: .74rem; }
+    .routes { display: grid; gap: 9px; padding: 20px; }
+    .route { display: grid; grid-template-columns: 54px 1fr; align-items: center; gap: 10px; color: var(--soft); font-family: "SFMono-Regular", Consolas, monospace; font-size: .82rem; }
+    .method { padding: .22rem .32rem; border-radius: 5px; color: var(--accent); font-size: .65rem; font-weight: 900; text-align: center; background: rgba(34,211,238,.08); }
+    .method.post { color: #5eead4; background: rgba(20,184,166,.1); }
+    .api-note { padding: 26px; }
+    .api-note p { color: var(--muted); }
+
+    .rule-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; }
+    .rule-card { padding: 20px; }
+    .rule-name { color: var(--accent); font-family: "SFMono-Regular", Consolas, monospace; font-size: .78rem; font-weight: 800; word-break: break-word; }
+    .rule-card p { margin: .9rem 0 0; color: var(--muted); font-size: .84rem; }
+    .engine-strip { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 24px; }
+    .engine-strip span { padding: .45rem .65rem; border: 1px solid var(--border); border-radius: 999px; color: var(--soft); font-size: .78rem; }
+
+    .validation-grid { display: grid; grid-template-columns: 1.1fr .9fr; gap: 20px; }
+    .test-list { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; padding: 24px; }
+    .test-item { display: flex; align-items: center; gap: .65rem; padding: 10px; color: var(--soft); font-size: .86rem; }
+    .test-item::before { width: 7px; height: 7px; border-radius: 50%; content: ""; background: var(--success); box-shadow: 0 0 10px rgba(34,197,94,.4); }
+    .ci-card { padding: 26px; }
+    .ci-flow { display: grid; gap: 10px; margin-top: 18px; }
+    .ci-step { display: flex; align-items: center; gap: .7rem; padding: 12px; border: 1px solid var(--border); border-radius: 10px; background: rgba(5,8,22,.45); color: var(--soft); font-size: .84rem; }
+    .ci-step span { color: var(--success); }
+
+    .limitations { border-color: rgba(239,68,68,.18); background: linear-gradient(145deg, rgba(63,16,28,.26), rgba(11,18,32,.9)); }
+    .limitations-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 0 28px; padding: 28px; }
+    .limitation { display: flex; gap: .75rem; padding: 12px 0; border-bottom: 1px solid rgba(51,65,85,.5); color: var(--soft); font-size: .9rem; }
+    .limitation::before { content: "×"; color: #f87171; font-weight: 900; }
+
+    .tradeoff-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; }
+    .tradeoff-card { padding: 21px; }
+    .tradeoff-card p { margin: .7rem 0 0; color: var(--muted); font-size: .84rem; }
+
+    .roadmap-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+    .roadmap-card { position: relative; overflow: hidden; padding: 24px; }
+    .roadmap-card::after { position: absolute; right: -28px; bottom: -35px; width: 100px; height: 100px; border-radius: 50%; content: ""; background: rgba(34,211,238,.04); }
+    .future-label { display: inline-block; margin-bottom: 1rem; color: var(--primary); font-size: .68rem; font-weight: 900; letter-spacing: .13em; text-transform: uppercase; }
+    .roadmap-card ul { display: grid; gap: .45rem; margin: 1rem 0; padding-left: 1.1rem; color: var(--soft); font-size: .84rem; }
+    .why { padding-top: .9rem; border-top: 1px solid var(--border); color: var(--muted); font-size: .81rem; }
+
+    .status-layout { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+    .status-card { padding: 28px; }
+    .status-card ul { display: grid; gap: .7rem; padding: 0; list-style: none; color: var(--soft); }
+    .status-card li { display: flex; gap: .7rem; }
+    .status-card li::before { content: "•"; color: var(--primary); }
+
+    .final-cta { padding: 86px 0 110px; }
+    .cta-card { position: relative; overflow: hidden; padding: clamp(32px, 7vw, 74px); border-color: rgba(34,211,238,.22); text-align: center; }
+    .cta-card::before,
+    .cta-card::after { position: absolute; width: 300px; height: 300px; border-radius: 50%; content: ""; filter: blur(20px); pointer-events: none; }
+    .cta-card::before { top: -220px; left: -100px; background: rgba(20,184,166,.18); }
+    .cta-card::after { right: -100px; bottom: -240px; background: rgba(34,211,238,.14); }
+    .cta-card blockquote { position: relative; max-width: 900px; margin: 0 auto; font-size: clamp(1.6rem, 3.6vw, 3rem); font-weight: 780; letter-spacing: -.035em; line-height: 1.18; }
+    .cta-card .button-row { position: relative; justify-content: center; }
+
+    footer { padding: 26px 0 40px; border-top: 1px solid var(--border); color: var(--muted); font-size: .8rem; }
+    .footer-row { display: flex; align-items: center; justify-content: space-between; gap: 1rem; }
+    .footer-row a { color: var(--soft); text-decoration: none; }
+
+    .reveal { opacity: 0; transform: translateY(22px); transition: opacity .7s ease, transform .7s ease; }
+    .reveal.is-visible { opacity: 1; transform: none; }
+
+    @media (max-width: 1040px) {
+      .nav-links a { padding-inline: .48rem; font-size: .77rem; }
+      .hero-grid { grid-template-columns: 1fr; }
+      .hero-copy-wrap { max-width: 760px; }
+      .hero-visual { max-width: 760px; }
+      .feature-grid { grid-template-columns: repeat(2, 1fr); }
+      .state-grid { grid-template-columns: repeat(3, 1fr); }
+      .anchor-layout, .api-grid, .validation-grid { grid-template-columns: 1fr; }
+      .rule-grid { grid-template-columns: repeat(2, 1fr); }
+      .roadmap-grid { grid-template-columns: repeat(2, 1fr); }
+    }
+
+    @media (max-width: 840px) {
+      :root { --nav-height: 64px; }
+      .menu-toggle { display: block; }
+      .nav-links {
+        position: absolute;
+        top: calc(100% + 1px);
+        right: 20px;
+        left: 20px;
+        display: none;
+        flex-direction: column;
+        align-items: stretch;
+        gap: 4px;
+        padding: 12px;
+        border: 1px solid var(--border);
+        border-radius: 14px;
+        background: rgba(11,18,32,.98);
+        box-shadow: var(--shadow);
+      }
+      .nav-links.is-open { display: flex; }
+      .nav-links a { padding: .75rem .8rem; font-size: .86rem; }
+      .nav-links .nav-github { margin: 4px 0 0; text-align: center; }
+      .architecture-notes { grid-template-columns: 1fr; }
+      .console-body { grid-template-columns: 1fr; }
+      .console-tabs { flex-direction: row; overflow-x: auto; border-right: 0; border-bottom: 1px solid var(--border); }
+      .console-tab { flex: 0 0 auto; width: auto; }
+      .tradeoff-grid { grid-template-columns: repeat(2, 1fr); }
+    }
+
+    @media (max-width: 680px) {
+      .container { width: min(calc(100% - 28px), var(--max)); }
+      .section { padding: 78px 0; }
+      .hero { padding-top: 58px; }
+      .grid-2, .grid-3, .trust-grid, .status-layout { grid-template-columns: 1fr; }
+      .feature-grid, .rule-grid, .roadmap-grid, .tradeoff-grid { grid-template-columns: 1fr; }
+      .state-grid { grid-template-columns: 1fr 1fr; }
+      .architecture-shell { padding: 12px; }
+      .diagram-topline { align-items: flex-start; flex-direction: column; }
+      .architecture-svg { min-width: 700px; }
+      .architecture-scroll { overflow-x: auto; }
+      .workflow-track { grid-template-columns: 1fr; width: 100%; gap: 10px; padding-left: 30px; }
+      .workflow-track::before { top: 24px; bottom: 24px; left: 8px; width: 2px; height: auto; background: linear-gradient(var(--primary), var(--accent), var(--success)); }
+      .workflow-progress { display: none; }
+      .workflow-step { padding: 0; }
+      .workflow-dot { top: 25px; left: -22px; transform: none; }
+      .workflow-card { min-height: auto; }
+      .mini-flow { grid-template-columns: 1fr; }
+      .mini-arrow { transform: rotate(90deg); text-align: center; }
+      .status-columns, .test-list { grid-template-columns: 1fr; }
+      .preview-grid { grid-template-columns: 1fr; }
+      .mock-box.wide { grid-column: auto; }
+      .console-content { padding: 18px; }
+      .limitations-grid { grid-template-columns: 1fr; padding: 20px; }
+      .footer-row { flex-direction: column; align-items: flex-start; }
+    }
+
+    @media (max-width: 440px) {
+      .state-grid { grid-template-columns: 1fr; }
+      .button { width: 100%; }
+      .hero-tagline { font-size: 1.45rem; }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      html { scroll-behavior: auto; }
+      *, *::before, *::after { scroll-behavior: auto !important; animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }
+      .reveal { opacity: 1; transform: none; }
+    }
+  </style>
+</head>
+<body>
+  <a class="skip-link" href="#main-content">Skip to content</a>
+
+  <header class="site-header">
+    <div class="container nav-wrap">
+      <a class="brand" href="#top" aria-label="KALYX Learn home">
+        <span class="brand-mark" aria-hidden="true"></span>
+        <span>KALYX</span>
+      </a>
+      <button class="menu-toggle" type="button" aria-expanded="false" aria-controls="primary-navigation" aria-label="Open navigation"><span></span></button>
+      <nav class="nav-links" id="primary-navigation" aria-label="Primary navigation">
+        <a href="#problem">Problem</a>
+        <a href="#capabilities">Capabilities</a>
+        <a href="#architecture">Architecture</a>
+        <a href="#workflow">Workflow</a>
+        <a href="#trust">Trust</a>
+        <a href="#anchor">Anchor</a>
+        <a href="#roadmap">Roadmap</a>
+        <a class="nav-github" href="https://github.com/parthrohit22/kalyx" target="_blank" rel="noreferrer">GitHub ↗</a>
+      </nav>
+    </div>
+  </header>
+
+  <main id="main-content">
+    <section class="hero" id="top" aria-labelledby="hero-title">
+      <div class="container hero-grid">
+        <div class="hero-copy-wrap">
+          <div class="hero-kicker"><span class="pulse-dot" aria-hidden="true"></span>Execution Evidence Integrity Platform</div>
+          <h1 id="hero-title">KALYX</h1>
+          <p class="hero-subtitle">Execution Evidence Integrity Platform</p>
+          <p class="hero-tagline">Know when execution history can no longer be trusted.</p>
+          <p class="hero-copy">KALYX captures execution events into an append-only hash-chained ledger, verifies historical integrity deterministically, records trusted checkpoint boundaries, and compares them against an external Raspberry Pi anchor.</p>
+          <div class="button-row" aria-label="Explore KALYX">
+            <a class="button button-primary" href="#workflow">Learn how it works <span aria-hidden="true">↓</span></a>
+            <a class="button" href="#architecture">View architecture</a>
+            <a class="button" href="#trust">Trust model</a>
+            <a class="button" href="#roadmap">Future roadmap</a>
+            <a class="button" href="https://github.com/parthrohit22/kalyx" target="_blank" rel="noreferrer">GitHub ↗</a>
+          </div>
+        </div>
+
+        <div class="hero-visual" aria-label="Illustration of execution events moving through a hash-chained ledger, verification, checkpointing, and Raspberry Pi anchoring">
+          <svg viewBox="0 0 720 570" role="img" aria-labelledby="hero-visual-title hero-visual-desc">
+            <title id="hero-visual-title">KALYX evidence flow</title>
+            <desc id="hero-visual-desc">Execution events enter a chained ledger, pass through deterministic verification and checkpointing, then compare with an independent Raspberry Pi anchor. The verification signal changes from verified to tampered after a mismatch.</desc>
+            <defs>
+              <linearGradient id="heroPanel" x1="0" x2="1">
+                <stop offset="0" stop-color="#0b1220"/>
+                <stop offset="1" stop-color="#111827"/>
+              </linearGradient>
+              <linearGradient id="heroLine" x1="0" x2="1">
+                <stop offset="0" stop-color="#14b8a6"/>
+                <stop offset="1" stop-color="#22d3ee"/>
+              </linearGradient>
+              <filter id="heroGlow"><feGaussianBlur stdDeviation="4" result="blur"/><feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+              <marker id="heroArrow" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8 Z" fill="#14b8a6"/></marker>
+            </defs>
+
+            <text x="40" y="44" fill="#64748b" font-size="11" font-weight="800" letter-spacing="2">EVIDENCE CONTINUITY / LIVE MODEL</text>
+            <g transform="translate(40 86)">
+              <rect width="126" height="48" rx="12" fill="url(#heroPanel)" stroke="#1e293b"/>
+              <circle cx="20" cy="24" r="5" fill="#22d3ee" class="flow-particle"/>
+              <text x="34" y="21" fill="#f9fafb" font-size="11" font-weight="700">EXEC EVENT</text>
+              <text x="34" y="35" fill="#64748b" font-size="9">process / argv</text>
+            </g>
+            <g transform="translate(40 150)">
+              <rect width="126" height="48" rx="12" fill="url(#heroPanel)" stroke="#1e293b"/>
+              <circle cx="20" cy="24" r="5" fill="#14b8a6" class="flow-particle delay"/>
+              <text x="34" y="21" fill="#f9fafb" font-size="11" font-weight="700">EXEC EVENT</text>
+              <text x="34" y="35" fill="#64748b" font-size="9">user / action</text>
+            </g>
+
+            <path d="M166 110 C198 110 194 163 224 163" fill="none" stroke="url(#heroLine)" stroke-width="2" marker-end="url(#heroArrow)" class="flow-path"/>
+            <path d="M166 174 C194 174 197 174 224 174" fill="none" stroke="url(#heroLine)" stroke-width="2" marker-end="url(#heroArrow)" class="flow-path"/>
+
+            <g transform="translate(224 80)">
+              <rect width="242" height="206" rx="18" fill="#090f1c" stroke="#26354b"/>
+              <text x="20" y="31" fill="#94a3b8" font-size="10" font-weight="800" letter-spacing="1.4">HASH-CHAINED LEDGER</text>
+              <g transform="translate(18 49)">
+                <rect width="206" height="39" rx="9" fill="#111827" stroke="#1e293b"/>
+                <text x="13" y="17" fill="#22d3ee" font-family="monospace" font-size="9">#001</text>
+                <text x="13" y="29" fill="#64748b" font-family="monospace" font-size="8">prev: 0000…  hash: a7c3…</text>
+              </g>
+              <path d="M121 88 V101" stroke="#14b8a6" stroke-width="2" marker-end="url(#heroArrow)"/>
+              <g transform="translate(18 104)">
+                <rect width="206" height="39" rx="9" fill="#111827" stroke="#1e293b"/>
+                <text x="13" y="17" fill="#22d3ee" font-family="monospace" font-size="9">#002</text>
+                <text x="13" y="29" fill="#64748b" font-family="monospace" font-size="8">prev: a7c3…  hash: 19ef…</text>
+              </g>
+              <path d="M121 143 V156" stroke="#14b8a6" stroke-width="2" marker-end="url(#heroArrow)"/>
+              <g transform="translate(18 159)">
+                <rect width="206" height="29" rx="9" fill="#24121b" stroke="#7f1d1d"/>
+                <text x="13" y="19" fill="#f87171" font-family="monospace" font-size="8.5">#003  hash mismatch</text>
+              </g>
+            </g>
+
+            <path d="M466 180 H514" fill="none" stroke="#14b8a6" stroke-width="2" marker-end="url(#heroArrow)" class="flow-path"/>
+            <g transform="translate(514 125)">
+              <rect width="166" height="112" rx="16" fill="#0b1220" stroke="#1e4650"/>
+              <circle cx="32" cy="34" r="13" fill="rgba(34,211,238,.08)" stroke="#22d3ee"/>
+              <path d="M26 34 L31 39 L40 29" fill="none" stroke="#22d3ee" stroke-width="2"/>
+              <text x="54" y="31" fill="#f9fafb" font-size="11" font-weight="750">VERIFICATION</text>
+              <text x="54" y="46" fill="#64748b" font-size="9">canonical replay</text>
+              <g class="verified-signal">
+                <rect x="18" y="68" width="62" height="24" rx="12" fill="rgba(34,197,94,.09)" stroke="#22c55e"/>
+                <text x="49" y="84" text-anchor="middle" fill="#4ade80" font-size="8" font-weight="800">VERIFIED</text>
+              </g>
+              <text x="87" y="84" fill="#475569" font-size="10">→</text>
+              <g class="tampered-signal">
+                <rect x="99" y="68" width="54" height="24" rx="12" fill="rgba(239,68,68,.09)" stroke="#ef4444"/>
+                <text x="126" y="84" text-anchor="middle" fill="#f87171" font-size="7.5" font-weight="800">TAMPERED</text>
+              </g>
+            </g>
+
+            <path d="M596 237 V316" fill="none" stroke="#14b8a6" stroke-width="2" marker-end="url(#heroArrow)" class="flow-path"/>
+            <g transform="translate(442 316)">
+              <rect width="238" height="82" rx="15" fill="#0b1220" stroke="#1e293b"/>
+              <rect x="18" y="18" width="44" height="44" rx="11" fill="rgba(20,184,166,.09)" stroke="#14b8a6"/>
+              <path d="M29 31 H51 M29 40 H51 M29 49 H44" stroke="#5eead4" stroke-width="2"/>
+              <text x="78" y="35" fill="#f9fafb" font-size="11" font-weight="750">LOCAL CHECKPOINT</text>
+              <text x="78" y="51" fill="#64748b" font-size="9">verified boundary</text>
+              <text x="78" y="65" fill="#22d3ee" font-family="monospace" font-size="8">checkpoint_hash: c42e…</text>
+            </g>
+
+            <path d="M442 357 H360" fill="none" stroke="#14b8a6" stroke-width="2" marker-end="url(#heroArrow)" class="flow-path"/>
+            <g transform="translate(178 316)">
+              <rect width="182" height="154" rx="18" fill="#0b1220" stroke="#294156"/>
+              <text x="20" y="29" fill="#94a3b8" font-size="9" font-weight="800" letter-spacing="1">EXTERNAL BOUNDARY</text>
+              <g transform="translate(20 46)">
+                <rect width="64" height="64" rx="12" fill="#111827" stroke="#22d3ee"/>
+                <circle cx="18" cy="18" r="5" fill="#22d3ee"/>
+                <circle cx="46" cy="18" r="5" fill="#14b8a6"/>
+                <path d="M16 36 H48 M16 45 H48" stroke="#475569" stroke-width="3"/>
+                <path d="M8 22 H2 M8 34 H2 M8 46 H2 M62 22 H68 M62 34 H68 M62 46 H68" stroke="#64748b"/>
+              </g>
+              <text x="98" y="66" fill="#f9fafb" font-size="11" font-weight="750">Raspberry Pi</text>
+              <text x="98" y="82" fill="#64748b" font-size="9">anchor chain</text>
+              <rect x="98" y="94" width="58" height="22" rx="11" fill="rgba(34,197,94,.08)" stroke="#22c55e"/>
+              <text x="127" y="108" text-anchor="middle" fill="#4ade80" font-size="8" font-weight="800">MATCH</text>
+              <text x="20" y="135" fill="#64748b" font-size="8.5">checkpoint boundaries only</text>
+            </g>
+
+            <path d="M178 393 C125 418 126 478 194 495 H551 C610 495 628 451 606 398" fill="none" stroke="#22d3ee" stroke-width="1.5" stroke-dasharray="6 8" opacity=".6"/>
+            <text x="368" y="519" text-anchor="middle" fill="#64748b" font-size="9" letter-spacing="1">COMPARE HOST BOUNDARY WITH INDEPENDENT ANCHOR</text>
+          </svg>
+        </div>
+      </div>
+    </section>
+
+    <section class="section" id="problem" aria-labelledby="problem-title">
+      <div class="container">
+        <div class="section-head reveal">
+          <div class="eyebrow">01 / The problem</div>
+          <h2 id="problem-title">Logs are easy to collect.<br>Harder to trust.</h2>
+          <p class="lede">Traditional logs can look valid even after old entries are modified, reordered, truncated, or replaced. KALYX focuses on evidence continuity.</p>
+        </div>
+        <div class="grid-2">
+          <div class="reveal">
+            <ul class="problem-questions">
+              <li>Was this record appended after the previous one?</li>
+              <li>Did a record change after it was written?</li>
+              <li>Was a verified boundary removed or replaced?</li>
+              <li>Is the current ledger trusted enough for detection?</li>
+              <li>Does an independent anchor still agree with the host?</li>
+            </ul>
+          </div>
+          <div class="grid-2 reveal">
+            <article class="comparison card">
+              <div class="comparison-label">Traditional log viewer</div>
+              <div class="log-window" aria-hidden="true"><div class="window-bar"><i></i><i></i><i></i></div><div class="log-lines"><i class="log-line"></i><i class="log-line"></i><i class="log-line"></i></div></div>
+              <div class="result-line result-normal"><span>Result</span><strong>LOOKS NORMAL</strong></div>
+            </article>
+            <article class="comparison card">
+              <div class="comparison-label">KALYX verification</div>
+              <div class="log-window" aria-hidden="true"><div class="window-bar"><i></i><i></i><i></i></div><div class="log-lines"><i class="log-line"></i><i class="log-line"></i><i class="log-line" style="background:#4a1c28"></i></div></div>
+              <div class="result-line result-danger"><span>Result</span><strong>HASH MISMATCH / TRUST LOST</strong></div>
+            </article>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="section" id="capabilities" aria-labelledby="capabilities-title">
+      <div class="container">
+        <div class="section-head reveal">
+          <div class="eyebrow">02 / Product capabilities</div>
+          <h2 id="capabilities-title">What KALYX does.</h2>
+          <p class="lede">One evidence pipeline, exposed through thin interfaces and bounded by explicit trust decisions.</p>
+        </div>
+        <div class="feature-grid">
+          <article class="feature-card card card-hover reveal"><span class="feature-number">01</span><h3>Execution ingestion</h3><p>Accepts sample logs, raw execsnoop-style lines, structured API events, and live eBPF execsnoop output.</p></article>
+          <article class="feature-card card card-hover reveal"><span class="feature-number">02</span><h3>Processing pipeline</h3><p>Validates, enriches, and normalizes accepted events through shared backend services.</p></article>
+          <article class="feature-card card card-hover reveal"><span class="feature-number">03</span><h3>Hash-chained ledger</h3><p>Appends canonical JSONL records with sequence, previous hash, and record hash.</p></article>
+          <article class="feature-card card card-hover reveal"><span class="feature-number">04</span><h3>Deterministic verification</h3><p>Recomputes the chain and reports the first boundary that can no longer be trusted.</p></article>
+          <article class="feature-card card card-hover reveal"><span class="feature-number">05</span><h3>Local checkpoints</h3><p>Records previously verified ledger boundaries in a chained checkpoint history.</p></article>
+          <article class="feature-card card card-hover reveal"><span class="feature-number">06</span><h3>Trust-state enforcement</h3><p>Blocks new ingestion when current ledger or checkpoint continuity is untrusted.</p></article>
+          <article class="feature-card card card-hover reveal"><span class="feature-number">07</span><h3>Rule-based detection</h3><p>Runs deterministic, explainable rules after successful full-ledger hash-chain verification.</p></article>
+          <article class="feature-card card card-hover reveal"><span class="feature-number">08</span><h3>Alert persistence</h3><p>Writes replay-safe alerts to JSONL using stable signatures to avoid duplicates.</p></article>
+          <article class="feature-card card card-hover reveal"><span class="feature-number">09</span><h3>FastAPI host backend</h3><p>Exposes status, ingestion, verification, detection, alerts, ledger, and anchoring operations.</p></article>
+          <article class="feature-card card card-hover reveal"><span class="feature-number">10</span><h3>Angular operations console</h3><p>Provides a local browser interface over the host FastAPI backend.</p></article>
+          <article class="feature-card card card-hover reveal"><span class="feature-number">11</span><h3>Raspberry Pi anchor</h3><p>Stores checkpoint boundaries in a physically separable Pi-side hash chain.</p></article>
+          <article class="feature-card card card-hover reveal"><span class="feature-number">12</span><h3>Anchor comparison</h3><p>Compares the latest local checkpoint with the latest reachable external anchor.</p></article>
+        </div>
+      </div>
+    </section>
+
+    <section class="section" id="architecture" aria-labelledby="architecture-title">
+      <div class="container">
+        <div class="section-head reveal">
+          <div class="eyebrow">03 / Architecture</div>
+          <h2 id="architecture-title">Thin interfaces. Shared integrity core.</h2>
+          <p class="lede">CLI, FastAPI, and Angular expose the system. Integrity decisions live in shared host services. Raspberry Pi anchoring adds an external comparison boundary.</p>
+        </div>
+        <div class="architecture-shell card reveal">
+          <div class="diagram-topline"><span class="diagram-label">System architecture</span><span class="diagram-help">Hover or focus a node to inspect its responsibility.</span></div>
+          <div class="architecture-scroll">
+            <svg class="architecture-svg" viewBox="0 0 1120 730" role="img" aria-labelledby="arch-svg-title arch-svg-desc" aria-describedby="architecture-detail">
+              <title id="arch-svg-title">KALYX system architecture</title>
+              <desc id="arch-svg-desc">CLI, FastAPI, and Angular sit above a shared Host Evidence Core. Angular communicates only with FastAPI. The host anchor client communicates with the Raspberry Pi anchor API, which stores a separate anchor chain.</desc>
+              <defs>
+                <marker id="arrow" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8 Z" fill="#64748b"/></marker>
+                <filter id="nodeGlow"><feGaussianBlur stdDeviation="3" result="blur"/><feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+              </defs>
+
+              <rect class="layer" x="26" y="34" width="1068" height="154" rx="18"/>
+              <text class="layer-title" x="50" y="63">INTERFACES / ACCESS LAYERS</text>
+              <rect class="layer" x="26" y="220" width="772" height="476" rx="18"/>
+              <text class="layer-title" x="50" y="251">HOST EVIDENCE CORE</text>
+              <rect class="layer" x="826" y="220" width="268" height="476" rx="18"/>
+              <text class="layer-title" x="850" y="251">EXTERNAL ANCHOR</text>
+
+              <path class="connector" d="M190 148 V284"/>
+              <path class="connector" d="M560 148 V284"/>
+              <path class="connector accent-line" d="M845 111 H710"/>
+              <text x="742" y="99" fill="#5eead4" font-size="10">HTTP only</text>
+              <path class="connector" d="M190 354 V392"/>
+              <path class="connector" d="M560 354 V392"/>
+              <path class="connector" d="M190 462 V500"/>
+              <path class="connector" d="M560 462 V500"/>
+              <path class="connector" d="M190 570 V608"/>
+              <path class="connector" d="M560 570 V608"/>
+              <path class="connector accent-line" d="M690 646 H868 V354"/>
+              <path class="connector" d="M960 392 V500"/>
+              <path d="M868 570 H708" fill="none" stroke="#14b8a6" stroke-width="1.6" stroke-dasharray="7 7" marker-end="url(#arrow)"/>
+              <text x="730" y="558" fill="#5eead4" font-size="10">latest anchor</text>
+
+              <g class="arch-node" tabindex="0" role="group" aria-label="CLI access layer" data-title="CLI" data-detail="Operational commands call the same pipeline, ledger, detection, and anchor services used by the host API.">
+                <rect class="node-box" x="80" y="82" width="220" height="66" rx="13"/><text class="node-title" x="190" y="110" text-anchor="middle">CLI</text><text class="node-sub" x="190" y="128" text-anchor="middle">kalyx</text>
+              </g>
+              <g class="arch-node" tabindex="0" role="group" aria-label="FastAPI Host API access layer" data-title="FastAPI Host API" data-detail="The host HTTP authority exposes status, verification, ingestion, detection, alerts, ledger inspection, and anchor operations.">
+                <rect class="node-box" x="450" y="82" width="220" height="66" rx="13"/><text class="node-title" x="560" y="110" text-anchor="middle">FastAPI Host API</text><text class="node-sub" x="560" y="128" text-anchor="middle">kalyx-api</text>
+              </g>
+              <g class="arch-node" tabindex="0" role="group" aria-label="Angular Dashboard access layer" data-title="Angular Dashboard" data-detail="The browser console calls Host FastAPI only. It never calls the Raspberry Pi anchor service directly.">
+                <rect class="node-box" x="820" y="82" width="220" height="66" rx="13"/><text class="node-title" x="930" y="110" text-anchor="middle">Angular Dashboard</text><text class="node-sub" x="930" y="128" text-anchor="middle">local operations console</text>
+              </g>
+
+              <g class="arch-node" tabindex="0" role="group" aria-label="Pipeline" data-title="Pipeline" data-detail="Validates, enriches, and normalizes input before any record can be appended to the ledger.">
+                <rect class="node-box" x="80" y="284" width="220" height="70" rx="13"/><text class="node-title" x="190" y="313" text-anchor="middle">Pipeline</text><text class="node-sub" x="190" y="333" text-anchor="middle">validate / enrich / normalize</text>
+              </g>
+              <g class="arch-node" tabindex="0" role="group" aria-label="Verification engine" data-title="Verification Engine" data-detail="Replays canonical hashes and previous-hash links to locate the first untrusted ledger boundary.">
+                <rect class="node-box" x="450" y="284" width="220" height="70" rx="13"/><text class="node-title" x="560" y="313" text-anchor="middle">Verification Engine</text><text class="node-sub" x="560" y="333" text-anchor="middle">deterministic full-chain replay</text>
+              </g>
+              <g class="arch-node" tabindex="0" role="group" aria-label="Trust gate" data-title="Trust Gate" data-detail="Ingestion is blocked when current ledger or checkpoint continuity is untrusted. This gate runs before append.">
+                <rect class="node-box" x="80" y="392" width="220" height="70" rx="13"/><text class="node-title" x="190" y="421" text-anchor="middle">Trust Gate</text><text class="node-sub" x="190" y="441" text-anchor="middle">enforce before append</text>
+              </g>
+              <g class="arch-node" tabindex="0" role="group" aria-label="Checkpoint chain" data-title="Checkpoint Chain" data-detail="Stores locally chained, previously verified boundaries and detects checkpoint edits, breaks, or a ledger falling behind.">
+                <rect class="node-box" x="450" y="392" width="220" height="70" rx="13"/><text class="node-title" x="560" y="421" text-anchor="middle">Checkpoint Chain</text><text class="node-sub" x="560" y="441" text-anchor="middle">local verified boundaries</text>
+              </g>
+              <g class="arch-node" tabindex="0" role="group" aria-label="Hash-chained ledger" data-title="Hash-Chained Ledger" data-detail="Append-only JSONL records carry sequence, previous hash, and deterministic record hash fields.">
+                <rect class="node-box" x="80" y="500" width="220" height="70" rx="13"/><text class="node-title" x="190" y="529" text-anchor="middle">Hash-Chained Ledger</text><text class="node-sub" x="190" y="549" text-anchor="middle">append-only JSONL</text>
+              </g>
+              <g class="arch-node" tabindex="0" role="group" aria-label="Anchor client" data-title="Anchor Client" data-detail="Uses KALYX_ANCHOR_URL to submit the latest safe checkpoint and compare local state with the latest Pi anchor.">
+                <rect class="node-box" x="450" y="500" width="220" height="70" rx="13"/><text class="node-title" x="560" y="529" text-anchor="middle">Anchor Client</text><text class="node-sub" x="560" y="549" text-anchor="middle">submit / compare</text>
+              </g>
+              <g class="arch-node" tabindex="0" role="group" aria-label="Detection engine" data-title="Detection Engine" data-detail="Runs deterministic rules only after successful full-ledger hash-chain verification. It does not currently evaluate checkpoint continuity.">
+                <rect class="node-box" x="80" y="608" width="220" height="70" rx="13"/><text class="node-title" x="190" y="637" text-anchor="middle">Detection Engine</text><text class="node-sub" x="190" y="657" text-anchor="middle">verification-gated rules</text>
+              </g>
+              <g class="arch-node" tabindex="0" role="group" aria-label="Alert log" data-title="Alert Log" data-detail="Persists deduplicated alerts using stable signatures and serialized JSONL appends.">
+                <rect class="node-box" x="450" y="608" width="220" height="70" rx="13"/><text class="node-title" x="560" y="637" text-anchor="middle">Alert Log</text><text class="node-sub" x="560" y="657" text-anchor="middle">deduplicated JSONL</text>
+              </g>
+
+              <g class="arch-node" tabindex="0" role="group" aria-label="Raspberry Pi Anchor API" data-title="Raspberry Pi Anchor API" data-detail="Accepts checkpoint boundary submissions and returns the latest anchor for a selected ledger ID.">
+                <rect class="node-box" x="850" y="284" width="220" height="70" rx="13"/><text class="node-title" x="960" y="313" text-anchor="middle">Pi Anchor API</text><text class="node-sub" x="960" y="333" text-anchor="middle">POST /anchor</text>
+              </g>
+              <g class="arch-node" tabindex="0" role="group" aria-label="Pi anchor chain" data-title="Pi Anchor Chain" data-detail="Stores checkpoint boundaries—not every host event—in its own validated, append-only hash chain.">
+                <rect class="node-box" x="850" y="500" width="220" height="70" rx="13"/><text class="node-title" x="960" y="529" text-anchor="middle">Pi Anchor Chain</text><text class="node-sub" x="960" y="549" text-anchor="middle">checkpoint boundaries only</text>
+              </g>
+            </svg>
+          </div>
+          <div class="diagram-detail" id="architecture-detail" aria-live="polite"><strong>Architecture boundary.</strong> Interfaces expose the product; shared host services make integrity decisions; the Raspberry Pi holds an independent checkpoint comparison boundary.</div>
+          <div class="architecture-notes">
+            <div class="architecture-note"><strong class="accent">Access layers only.</strong><br>CLI, API, and Angular do not implement separate integrity engines.</div>
+            <div class="architecture-note"><strong class="accent">Host-controlled path.</strong><br>Angular calls Host FastAPI; host-to-Pi traffic uses <span class="mono">KALYX_ANCHOR_URL</span>.</div>
+            <div class="architecture-note"><strong class="accent">Boundary, not omniscience.</strong><br>The Pi stores checkpoints rather than validating every execution event.</div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="section" id="workflow" aria-labelledby="workflow-title">
+      <div class="container">
+        <div class="section-head reveal">
+          <div class="eyebrow">04 / End-to-end workflow</div>
+          <h2 id="workflow-title">From event capture to independent comparison.</h2>
+          <p class="lede">The trust gate happens before append. Detection branches from successful full-ledger hash-chain verification; it does not require checkpoint continuity.</p>
+        </div>
+        <div class="workflow-viewport reveal" aria-label="KALYX processing workflow">
+          <div class="workflow-track">
+            <span class="workflow-progress" aria-hidden="true"></span>
+            <article class="workflow-step"><i class="workflow-dot"></i><div class="workflow-card"><span class="workflow-index">01</span><h3>Capture event</h3><p>Receive sample, raw, structured, or live execsnoop input.</p></div></article>
+            <article class="workflow-step"><i class="workflow-dot"></i><div class="workflow-card"><span class="workflow-index">02</span><h3>Validate</h3><p>Reject missing fields, invalid PIDs, and blank commands.</p></div></article>
+            <article class="workflow-step"><i class="workflow-dot"></i><div class="workflow-card"><span class="workflow-index">03</span><h3>Enrich</h3><p>Add best-effort process and execution context.</p></div></article>
+            <article class="workflow-step"><i class="workflow-dot"></i><div class="workflow-card"><span class="workflow-index">04</span><h3>Normalize</h3><p>Produce a stable event shape for hashing and rules.</p></div></article>
+            <article class="workflow-step"><i class="workflow-dot"></i><div class="workflow-card"><span class="workflow-index">05</span><h3>Trust gate</h3><p>Refuse append when ledger or checkpoint state is untrusted.</p></div></article>
+            <article class="workflow-step"><i class="workflow-dot"></i><div class="workflow-card"><span class="workflow-index">06</span><h3>Append</h3><p>Write a canonical record linked to the previous hash.</p></div></article>
+            <article class="workflow-step"><i class="workflow-dot"></i><div class="workflow-card"><span class="workflow-index">07</span><h3>Verify ledger</h3><p>Replay the full hash chain and locate any failure boundary.</p></div></article>
+            <article class="workflow-step"><i class="workflow-dot"></i><div class="workflow-card"><span class="workflow-index">08</span><h3>Checkpoint</h3><p>Record a safe local boundary after successful verification.</p></div></article>
+            <article class="workflow-step"><i class="workflow-dot"></i><div class="workflow-card"><span class="workflow-index">09</span><h3>Anchor to Pi</h3><p>Submit the latest checkpoint boundary to the Pi service.</p></div></article>
+            <article class="workflow-step"><i class="workflow-dot"></i><div class="workflow-card"><span class="workflow-index">10</span><h3>Compare</h3><p>Report whether local and external checkpoint states agree.</p></div></article>
+            <article class="workflow-step"><i class="workflow-dot"></i><div class="workflow-card"><span class="workflow-index">11</span><h3>Run detection</h3><p>Evaluate rules after full-ledger hash-chain verification.</p></div></article>
+            <article class="workflow-step"><i class="workflow-dot"></i><div class="workflow-card"><span class="workflow-index">12</span><h3>Persist alerts</h3><p>Write only alerts whose stable signatures are new.</p></div></article>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="section" id="trust" aria-labelledby="trust-title">
+      <div class="container">
+        <div class="section-head reveal">
+          <div class="eyebrow">05 / Trust model</div>
+          <h2 id="trust-title">Evidence continuity, not event truth.</h2>
+          <p class="lede">KALYX can prove specific properties about records it accepted and the continuity of their stored history. Its guarantees stop before source authenticity and full-host trust.</p>
+        </div>
+        <div class="trust-grid">
+          <article class="trust-card card can reveal">
+            <h3>What KALYX can verify</h3>
+            <ul class="check-list">
+              <li>A ledger record changed after append</li>
+              <li>A previous-hash link was broken</li>
+              <li>Ledger JSON is malformed</li>
+              <li>The first untrusted record boundary</li>
+              <li>A local checkpoint was edited</li>
+              <li>Checkpoint history was reordered or broken</li>
+              <li>The ledger fell behind a previous checkpoint</li>
+              <li>Detection ran after full-ledger hash-chain verification</li>
+              <li>A checkpoint was compared with an external anchor</li>
+            </ul>
+          </article>
+          <article class="trust-card card cannot reveal">
+            <h3>What KALYX cannot verify</h3>
+            <ul class="check-list">
+              <li>Event source authenticity</li>
+              <li>Kernel-level trust</li>
+              <li>Resistance to full host compromise</li>
+              <li>Malware prevention or process blocking</li>
+              <li>Complete remote attestation</li>
+              <li>Continuous anchor availability</li>
+              <li>Truthfulness of process identity or metadata</li>
+              <li>Independent Pi validation of every host event</li>
+            </ul>
+          </article>
+        </div>
+        <blockquote class="boundary-quote reveal">“KALYX verifies records it accepted. KALYX does not prove the original event source was truthful.”<span>This is the core product boundary—not a footnote.</span></blockquote>
+      </div>
+    </section>
+
+    <section class="section section-tight" id="trust-states" aria-labelledby="trust-states-title">
+      <div class="container">
+        <div class="section-head reveal">
+          <div class="eyebrow">06 / Operational trust states</div>
+          <h2 id="trust-states-title">Trust is explicit.</h2>
+        </div>
+        <div class="state-grid">
+          <article class="state-card card reveal"><span class="badge badge-success">VERIFIED</span><p>The ledger verifies and does not conflict with the latest local checkpoint.</p></article>
+          <article class="state-card card reveal"><span class="badge badge-warning">PARTIALLY_TRUSTED</span><p>Verification failed after one or more earlier records remained trusted.</p></article>
+          <article class="state-card card reveal"><span class="badge badge-danger">UNTRUSTED</span><p>Ledger or checkpoint continuity cannot be trusted operationally.</p></article>
+          <article class="state-card card reveal"><span class="badge badge-neutral">EMPTY</span><p>The ledger file exists but contains no execution records.</p></article>
+          <article class="state-card card reveal"><span class="badge badge-accent">NO_LEDGER</span><p>No ledger file exists yet for the current environment.</p></article>
+        </div>
+        <div class="nuance-callout reveal">
+          <span class="icon" aria-hidden="true">!</span>
+          <p><strong>Important boundary:</strong> ingestion is blocked when current ledger or checkpoint state is untrusted. Detection is skipped when full-ledger hash-chain verification fails, but detection currently does not evaluate local checkpoint continuity. Full hash-chain verification itself does not require checkpoint trust.</p>
+        </div>
+      </div>
+    </section>
+
+    <section class="section" id="anchor" aria-labelledby="anchor-title">
+      <div class="container">
+        <div class="section-head reveal">
+          <div class="eyebrow">07 / Raspberry Pi anchoring</div>
+          <h2 id="anchor-title">Independent comparison boundary.</h2>
+          <p class="lede">The host holds the ledger. A Raspberry Pi can hold checkpoint boundaries somewhere physically separate, giving local history an external state to compare against.</p>
+        </div>
+        <div class="anchor-layout">
+          <article class="anchor-copy card reveal">
+            <h3>Why a Raspberry Pi?</h3>
+            <p>It is low-cost, suited to always-on operation, and can run a small API outside the host without introducing distributed-system complexity.</p>
+            <ul class="reason-list">
+              <li>Can be physically separated from the monitored host</li>
+              <li>Small, source-distributed FastAPI anchor service</li>
+              <li>Independent storage for checkpoint comparison</li>
+              <li>Demonstrates trust separation without claiming perfect authority</li>
+            </ul>
+          </article>
+          <article class="anchor-flow card reveal">
+            <span class="diagram-label">Anchor workflow</span>
+            <div class="mini-flow" aria-label="Host checkpoint submitted to Raspberry Pi anchor chain">
+              <div class="mini-node"><strong>Host ledger</strong><span>verified locally</span></div><span class="mini-arrow" aria-hidden="true">→</span>
+              <div class="mini-node"><strong>Checkpoint</strong><span>boundary payload</span></div><span class="mini-arrow" aria-hidden="true">→</span>
+              <div class="mini-node"><strong>Pi anchor chain</strong><span>stored externally</span></div>
+            </div>
+            <p class="muted">The Pi stores checkpoint metadata—not each execution event:</p>
+            <div class="field-cloud" aria-label="Fields stored in a Pi anchor record">
+              <code>checkpoint_index</code><code>record_count</code><code>last_seq</code><code>last_hash</code><code>checkpoint_hash</code><code>previous_checkpoint_hash</code><code>pi_anchor_hash</code>
+            </div>
+          </article>
+        </div>
+        <div class="status-columns">
+          <article class="status-panel card reveal"><h3>Submission states</h3><div class="status-list"><span class="status-token">ACCEPTED</span><span class="status-token">ALREADY_ANCHORED</span><span class="status-token">REJECTED_STALE</span><span class="status-token">REJECTED_INVALID</span></div></article>
+          <article class="status-panel card reveal"><h3>Comparison states</h3><div class="status-list"><span class="status-token">MATCH</span><span class="status-token">BEHIND</span><span class="status-token">AHEAD</span><span class="status-token">DIVERGENCE</span><span class="status-token">NO_ANCHOR</span><span class="status-token">UNREACHABLE</span></div></article>
+        </div>
+      </div>
+    </section>
+
+    <section class="section" id="console" aria-labelledby="console-title">
+      <div class="container">
+        <div class="section-head reveal">
+          <div class="eyebrow">08 / Angular operations console</div>
+          <h2 id="console-title">A local console over Host FastAPI.</h2>
+          <p class="lede">The dashboard presents backend state and operations. It does not decide trust in the browser, and it never calls the Raspberry Pi directly.</p>
+        </div>
+        <div class="console-shell reveal">
+          <div class="console-bar"><div class="console-dots" aria-hidden="true"><i></i><i></i><i></i></div><span class="preview-label">Interface preview — abstract, not live data</span></div>
+          <div class="console-body">
+            <div class="console-tabs" role="tablist" aria-label="Operations console screen previews">
+              <button class="console-tab" id="tab-overview" type="button" role="tab" aria-selected="true" aria-controls="panel-overview" tabindex="0">Overview</button>
+              <button class="console-tab" id="tab-ledger" type="button" role="tab" aria-selected="false" aria-controls="panel-ledger" tabindex="-1">Ledger</button>
+              <button class="console-tab" id="tab-verification" type="button" role="tab" aria-selected="false" aria-controls="panel-verification" tabindex="-1">Verification</button>
+              <button class="console-tab" id="tab-ingestion" type="button" role="tab" aria-selected="false" aria-controls="panel-ingestion" tabindex="-1">Ingestion</button>
+              <button class="console-tab" id="tab-detection" type="button" role="tab" aria-selected="false" aria-controls="panel-detection" tabindex="-1">Detection</button>
+              <button class="console-tab" id="tab-alerts" type="button" role="tab" aria-selected="false" aria-controls="panel-alerts" tabindex="-1">Alerts</button>
+              <button class="console-tab" id="tab-evidence" type="button" role="tab" aria-selected="false" aria-controls="panel-evidence" tabindex="-1">Evidence</button>
+            </div>
+            <div class="console-content">
+              <section class="console-panel" id="panel-overview" role="tabpanel" aria-labelledby="tab-overview">
+                <div class="preview-head"><div><h3>Overview</h3><p>Trust state, ledger state, checkpoint state, recent records, and alerts.</p></div><span class="badge badge-success">VERIFIED</span></div>
+                <div class="preview-grid"><div class="mock-box"><span class="mock-label">Ledger entries</span><div class="mock-value">—</div></div><div class="mock-box"><span class="mock-label">Checkpoint state</span><div class="mock-value">VALID_CHECKPOINT_CHAIN</div></div><div class="mock-box"><span class="mock-label">Last hash</span><div class="mock-value">••••••••</div></div><div class="mock-box wide"><span class="mock-label">Recent records</span><div class="mock-lines"><i></i><i></i><i></i></div></div><div class="mock-box"><span class="mock-label">Recent alerts</span><div class="mock-lines"><i></i><i></i></div></div></div>
+              </section>
+              <section class="console-panel" id="panel-ledger" role="tabpanel" aria-labelledby="tab-ledger" hidden>
+                <div class="preview-head"><div><h3>Ledger</h3><p>Search and inspect recent parsed records without treating display as verification.</p></div><span class="preview-label">Inspection</span></div>
+                <div class="preview-grid"><div class="mock-box wide"><span class="mock-label">Record table</span><div class="mock-lines"><i></i><i></i><i></i></div></div><div class="mock-box"><span class="mock-label">JSON drawer</span><div class="mock-value">{ seq, hash, prev_hash }</div></div></div>
+              </section>
+              <section class="console-panel" id="panel-verification" role="tabpanel" aria-labelledby="tab-verification" hidden>
+                <div class="preview-head"><div><h3>Verification</h3><p>Run deterministic verification, inspect trust metadata, and manage anchor comparison.</p></div><span class="badge badge-accent">VERIFY</span></div>
+                <div class="preview-grid"><div class="mock-box"><span class="mock-label">Verification result</span><div class="mock-value">VALID / TAMPERED</div></div><div class="mock-box"><span class="mock-label">Anchor status</span><div class="mock-value">MATCH / AHEAD / …</div></div><div class="mock-box"><span class="mock-label">First boundary</span><div class="mock-value">failure_index: —</div></div></div>
+              </section>
+              <section class="console-panel" id="panel-ingestion" role="tabpanel" aria-labelledby="tab-ingestion" hidden>
+                <div class="preview-head"><div><h3>Ingestion</h3><p>Submit structured events or raw execsnoop-style lines through the shared pipeline.</p></div><span class="preview-label">Trust-gated</span></div>
+                <div class="preview-grid"><div class="mock-box wide"><span class="mock-label">Structured event</span><div class="mock-lines"><i></i><i></i><i></i></div></div><div class="mock-box"><span class="mock-label">Raw line</span><div class="mock-value">comm pid ppid argv</div></div></div>
+              </section>
+              <section class="console-panel" id="panel-detection" role="tabpanel" aria-labelledby="tab-detection" hidden>
+                <div class="preview-head"><div><h3>Detection</h3><p>Run explainable rules after successful full-ledger hash-chain verification.</p></div><span class="preview-label">No ML</span></div>
+                <div class="preview-grid"><div class="mock-box wide"><span class="mock-label">Rule execution</span><div class="mock-lines"><i></i><i></i><i></i></div></div><div class="mock-box"><span class="mock-label">Persisted</span><div class="mock-value">stable signatures</div></div></div>
+              </section>
+              <section class="console-panel" id="panel-alerts" role="tabpanel" aria-labelledby="tab-alerts" hidden>
+                <div class="preview-head"><div><h3>Alerts</h3><p>Search and filter explainable, deduplicated alert records.</p></div><span class="preview-label">JSONL</span></div>
+                <div class="preview-grid"><div class="mock-box wide"><span class="mock-label">Alert records</span><div class="mock-lines"><i></i><i></i><i></i></div></div><div class="mock-box"><span class="mock-label">Filters</span><div class="mock-value">type / severity / user</div></div></div>
+              </section>
+              <section class="console-panel" id="panel-evidence" role="tabpanel" aria-labelledby="tab-evidence" hidden>
+                <div class="preview-head"><div><h3>Evidence</h3><p>Inspect raw backend JSON responses and verification metadata.</p></div><span class="preview-label">Raw response</span></div>
+                <div class="preview-grid"><div class="mock-box wide"><span class="mock-label">Evidence JSON</span><div class="mock-value">{ "trust_state": "…",<br> &nbsp;"checkpoint_state": "…" }</div></div><div class="mock-box"><span class="mock-label">Source</span><div class="mock-value">Host FastAPI</div></div></div>
+              </section>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="section" id="api" aria-labelledby="api-title">
+      <div class="container">
+        <div class="section-head reveal">
+          <div class="eyebrow">09 / API surface</div>
+          <h2 id="api-title">Two APIs. Two responsibilities.</h2>
+          <p class="lede">Host FastAPI exposes product operations. The Pi API accepts and returns checkpoint boundaries.</p>
+        </div>
+        <div class="api-grid">
+          <div class="terminal reveal">
+            <div class="terminal-head">Host API · <span class="mono">kalyx-api :8000</span></div>
+            <div class="routes">
+              <div class="route"><span class="method">GET</span><span>/</span></div><div class="route"><span class="method">GET</span><span>/status</span></div>
+              <div class="route"><span class="method post">POST</span><span>/verify</span></div><div class="route"><span class="method post">POST</span><span>/ingest</span></div>
+              <div class="route"><span class="method post">POST</span><span>/detect</span></div><div class="route"><span class="method">GET</span><span>/alerts</span></div>
+              <div class="route"><span class="method">GET</span><span>/ledger</span></div><div class="route"><span class="method">GET</span><span>/anchor/status</span></div>
+              <div class="route"><span class="method post">POST</span><span>/anchor</span></div>
+            </div>
+          </div>
+          <div class="terminal reveal">
+            <div class="terminal-head">Anchor API · <span class="mono">kalyx-anchor :8081</span></div>
+            <div class="routes"><div class="route"><span class="method post">POST</span><span>/anchor</span></div><div class="route"><span class="method">GET</span><span>/anchor/latest?ledger_id=…</span></div></div>
+            <div class="api-note"><h3>Protection boundary</h3><p>When configured, an API key protects host operational routes. It is lightweight local protection—not full authentication, sessions, RBAC, or event-source attestation. The current Pi API is unauthenticated.</p></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="section" id="detection" aria-labelledby="detection-title">
+      <div class="container">
+        <div class="section-head reveal"><div class="eyebrow">10 / Detection engine</div><h2 id="detection-title">Deterministic by design.</h2><p class="lede">No ML. No threat-intelligence dependency. Rules remain inspectable, testable, and explainable.</p></div>
+        <div class="engine-strip reveal"><span>Full hash-chain verification gate</span><span>Deterministic ordering</span><span>Stable alert signatures</span><span>Replay-safe persistence</span></div>
+        <div class="rule-grid">
+          <article class="rule-card card card-hover reveal"><span class="rule-name">DELETE_CREATE</span><p>Delete followed by create on the same target within a configured window.</p></article>
+          <article class="rule-card card card-hover reveal"><span class="rule-name">MODIFY_BURST</span><p>Repeated modifications against the same known target over a short interval.</p></article>
+          <article class="rule-card card card-hover reveal"><span class="rule-name">DESTRUCTIVE_BURST</span><p>Multiple destructive actions by the same user or session in a short window.</p></article>
+          <article class="rule-card card card-hover reveal"><span class="rule-name">SCRIPTED_DESTRUCTIVE_ACTION</span><p>Delete or modify activity launched by scripting parents outside interactive sessions.</p></article>
+        </div>
+        <div class="nuance-callout reveal"><span class="icon" aria-hidden="true">i</span><p>Detection verifies the full ledger hash chain before replaying records. It does not currently consult local checkpoint continuity, so it must not be described as enforcing checkpoint trust.</p></div>
+      </div>
+    </section>
+
+    <section class="section" id="validation" aria-labelledby="validation-title">
+      <div class="container">
+        <div class="section-head reveal"><div class="eyebrow">11 / Testing and validation</div><h2 id="validation-title">Trust behavior is tested, not implied.</h2><p class="lede">The repository focuses automated coverage on integrity, corruption, trust gates, anchoring, APIs, and typed Angular service/state behavior.</p></div>
+        <div class="validation-grid">
+          <div class="test-list card reveal">
+            <div class="test-item">Ledger integrity</div><div class="test-item">Corruption handling</div><div class="test-item">Concurrent appends</div><div class="test-item">Pipeline validation</div><div class="test-item">Ingestion trust gate</div><div class="test-item">Local checkpoints</div><div class="test-item">Trust states</div><div class="test-item">Detection rules</div><div class="test-item">Alert persistence</div><div class="test-item">Host API</div><div class="test-item">Anchor service</div><div class="test-item">Angular service/state</div>
+          </div>
+          <article class="ci-card card reveal"><h3>GitHub Actions</h3><p class="muted">Pull requests and pushes to <span class="mono">main</span> validate:</p><div class="ci-flow"><div class="ci-step"><span>✓</span> Python source compilation</div><div class="ci-step"><span>✓</span> Backend pytest suite</div><div class="ci-step"><span>✓</span> Angular production build</div></div><p class="micro" style="margin-top:16px">Angular browser/Karma tests exist locally but are not currently run by CI.</p></article>
+        </div>
+      </div>
+    </section>
+
+    <section class="section" id="limitations" aria-labelledby="limitations-title">
+      <div class="container">
+        <div class="section-head reveal"><div class="eyebrow">12 / Limitations</div><h2 id="limitations-title">Credibility starts with the boundary.</h2><p class="lede">KALYX is intentionally narrow. It makes accepted evidence tamper-evident; it does not turn a local prototype into a complete security platform.</p></div>
+        <div class="limitations card reveal">
+          <div class="limitations-grid">
+            <div class="limitation">Does not prevent attacks or block processes</div><div class="limitation">Does not prove source truthfulness</div>
+            <div class="limitation">Does not guarantee kernel trust</div><div class="limitation">Cannot resist full host compromise alone</div>
+            <div class="limitation">Does not replace SIEM or EDR</div><div class="limitation">Does not provide signed anchor receipts yet</div>
+            <div class="limitation">Does not validate every event on the Pi</div><div class="limitation">Does not provide production deployment hardening yet</div>
+            <div class="limitation">Local JSONL is inspectable, not indexed storage</div><div class="limitation">Full verification is O(n)</div>
+            <div class="limitation">Detection uses rules, not ML</div><div class="limitation">The current Pi API is unauthenticated</div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="section" id="tradeoffs" aria-labelledby="tradeoffs-title">
+      <div class="container">
+        <div class="section-head reveal"><div class="eyebrow">13 / Design tradeoffs</div><h2 id="tradeoffs-title">Simple enough to inspect.</h2><p class="lede">The current architecture favors visible mechanics and deterministic behavior over operational scale.</p></div>
+        <div class="tradeoff-grid">
+          <article class="tradeoff-card card reveal"><h3>JSONL ledger</h3><p>Append-friendly, inspectable, and straightforward to verify one line at a time.</p></article>
+          <article class="tradeoff-card card reveal"><h3>Canonical hashing</h3><p>Stable serialization keeps deterministic verification reproducible.</p></article>
+          <article class="tradeoff-card card reveal"><h3>Local checkpoints</h3><p>Record verified boundaries before an external anchor is available.</p></article>
+          <article class="tradeoff-card card reveal"><h3>Raspberry Pi anchor</h3><p>Adds an independent comparison boundary without a large distributed system.</p></article>
+          <article class="tradeoff-card card reveal"><h3>Rule-based detection</h3><p>Produces explainable outputs with explicit, testable semantics.</p></article>
+          <article class="tradeoff-card card reveal"><h3>Thin interfaces</h3><p>CLI, API, and Angular reuse shared host services rather than duplicating trust logic.</p></article>
+          <article class="tradeoff-card card reveal"><h3>No database yet</h3><p>Keeps the early product inspectable until indexed storage is operationally necessary.</p></article>
+        </div>
+      </div>
+    </section>
+
+    <section class="section" id="roadmap" aria-labelledby="roadmap-title">
+      <div class="container">
+        <div class="section-head reveal"><div class="eyebrow">14 / Future enhancements</div><h2 id="roadmap-title">The next trust boundaries.</h2><p class="lede">These are planned directions, not current capabilities or production guarantees.</p></div>
+        <div class="roadmap-grid">
+          <article class="roadmap-card card card-hover reveal"><span class="future-label">Future / Cryptographic hardening</span><h3>Authenticate the exchange</h3><ul><li>Signed anchor receipts</li><li>HMAC or signature support</li><li>Host identity</li></ul><p class="why"><strong>Why:</strong> reduce forged or unauthenticated submissions and strengthen provenance and auditability—without implying legal admissibility by itself.</p></article>
+          <article class="roadmap-card card card-hover reveal"><span class="future-label">Future / Verification scale</span><h3>Move beyond full replay</h3><ul><li>Incremental verification</li><li>Checkpoint continuation</li><li>Merkle-style segmentation</li></ul><p class="why"><strong>Why:</strong> the current full-chain replay is simple and deterministic but grows more expensive with the ledger.</p></article>
+          <article class="roadmap-card card card-hover reveal"><span class="future-label">Future / Anchor hardening</span><h3>Strengthen the boundary</h3><ul><li>Authenticated Pi API</li><li>Signed Pi responses</li><li>Multiple anchors</li><li>Cloud or appliance option</li></ul><p class="why"><strong>Why:</strong> improve confidence in external comparison and reduce dependence on one unauthenticated anchor.</p></article>
+          <article class="roadmap-card card card-hover reveal"><span class="future-label">Future / Event provenance</span><h3>Raise source confidence</h3><ul><li>Authenticated ingestion</li><li>Source identity</li><li>Stronger collection pipeline</li></ul><p class="why"><strong>Why:</strong> hash chains preserve accepted evidence; provenance work would improve confidence in where that evidence originated.</p></article>
+          <article class="roadmap-card card card-hover reveal"><span class="future-label">Future / Storage and operations</span><h3>Make evaluation repeatable</h3><ul><li>Indexed storage</li><li>Exportable evidence bundles</li><li>Docker packaging</li><li>Reproducible demos</li></ul><p class="why"><strong>Why:</strong> make KALYX easier to run, inspect, and evaluate beyond a source checkout.</p></article>
+          <article class="roadmap-card card card-hover reveal"><span class="future-label">Future / Research track</span><h3>Evaluate the model</h3><ul><li>Tampering scenarios</li><li>Evidence provenance model</li><li>Remote attestation comparison</li><li>Open-source research</li></ul><p class="why"><strong>Why:</strong> test the trust model against documented scenarios and turn design claims into evidence-backed findings.</p></article>
+        </div>
+      </div>
+    </section>
+
+    <section class="section section-tight" id="status" aria-labelledby="status-title">
+      <div class="container">
+        <div class="section-head reveal"><div class="eyebrow">15 / Product status</div><h2 id="status-title">Working product. Early stage.</h2><p class="lede">KALYX is source-distributed and runs from a checkout. It is not yet packaged as a production service.</p></div>
+        <div class="status-layout">
+          <article class="status-card card reveal"><h3>Working today</h3><ul><li>Host FastAPI API</li><li>CLI</li><li>Angular operations console</li><li>Local ledger and checkpoint services</li><li>Raspberry Pi anchor service</li></ul></article>
+          <article class="status-card card reveal"><h3>Active product work</h3><ul><li>Security hardening</li><li>Deployment automation</li><li>Scalable storage</li><li>Signed anchoring</li><li>Stronger event provenance</li></ul></article>
+        </div>
+      </div>
+    </section>
+
+    <section class="final-cta" id="next" aria-labelledby="cta-title">
+      <div class="container">
+        <div class="cta-card card reveal">
+          <div class="eyebrow">16 / One narrow question</div>
+          <blockquote id="cta-title">“KALYX is not trying to solve every security problem. It focuses on one narrow but critical question: can collected execution evidence still be trusted?”</blockquote>
+          <div class="button-row">
+            <a class="button button-primary" href="https://github.com/parthrohit22/kalyx" target="_blank" rel="noreferrer">View GitHub ↗</a>
+            <a class="button" href="../ARCHITECTURE.md">Read Architecture</a>
+            <a class="button" href="../API_ENDPOINTS.md">Explore API</a>
+            <a class="button" href="../THREAT_MODEL.md">Threat Model</a>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer>
+    <div class="container footer-row"><span>KALYX · Execution Evidence Integrity Platform · Early-stage and source-distributed.</span><a href="#top">Back to top ↑</a></div>
+  </footer>
+
+  <script>
+    (() => {
+      'use strict';
+
+      const menuButton = document.querySelector('.menu-toggle');
+      const navigation = document.querySelector('#primary-navigation');
+      const navSectionLinks = Array.from(navigation.querySelectorAll('a[href^="#"]'));
+
+      const closeMenu = () => {
+        navigation.classList.remove('is-open');
+        menuButton.setAttribute('aria-expanded', 'false');
+        menuButton.setAttribute('aria-label', 'Open navigation');
+      };
+
+      menuButton.addEventListener('click', () => {
+        const open = !navigation.classList.contains('is-open');
+        navigation.classList.toggle('is-open', open);
+        menuButton.setAttribute('aria-expanded', String(open));
+        menuButton.setAttribute('aria-label', open ? 'Close navigation' : 'Open navigation');
+      });
+
+      navSectionLinks.forEach((link) => link.addEventListener('click', closeMenu));
+      document.addEventListener('keydown', (event) => {
+        if (event.key === 'Escape' && navigation.classList.contains('is-open')) {
+          closeMenu();
+          menuButton.focus();
+        }
+      });
+
+      const observedSections = navSectionLinks
+        .map((link) => document.querySelector(link.getAttribute('href')))
+        .filter(Boolean);
+
+      if ('IntersectionObserver' in window) {
+        const activeObserver = new IntersectionObserver((entries) => {
+          const visible = entries
+            .filter((entry) => entry.isIntersecting)
+            .sort((a, b) => b.intersectionRatio - a.intersectionRatio)[0];
+          if (!visible) return;
+          navSectionLinks.forEach((link) => {
+            const active = link.getAttribute('href') === `#${visible.target.id}`;
+            if (active) link.setAttribute('aria-current', 'location');
+            else link.removeAttribute('aria-current');
+          });
+        }, { rootMargin: '-18% 0px -66% 0px', threshold: [0, .15, .35] });
+        observedSections.forEach((section) => activeObserver.observe(section));
+      }
+
+      const revealElements = document.querySelectorAll('.reveal');
+      const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+      if (reducedMotion || !('IntersectionObserver' in window)) {
+        revealElements.forEach((element) => element.classList.add('is-visible'));
+      } else {
+        const revealObserver = new IntersectionObserver((entries, observer) => {
+          entries.forEach((entry) => {
+            if (!entry.isIntersecting) return;
+            entry.target.classList.add('is-visible');
+            observer.unobserve(entry.target);
+          });
+        }, { rootMargin: '0px 0px -8% 0px', threshold: .08 });
+        revealElements.forEach((element) => revealObserver.observe(element));
+      }
+
+      const detail = document.querySelector('#architecture-detail');
+      document.querySelectorAll('.arch-node').forEach((node) => {
+        const showDetail = () => {
+          detail.innerHTML = `<strong>${node.dataset.title}.</strong> ${node.dataset.detail}`;
+        };
+        node.addEventListener('mouseenter', showDetail);
+        node.addEventListener('focus', showDetail);
+      });
+
+      const tabs = Array.from(document.querySelectorAll('[role="tab"]'));
+      const selectTab = (tab, moveFocus = true) => {
+        tabs.forEach((candidate) => {
+          const selected = candidate === tab;
+          candidate.setAttribute('aria-selected', String(selected));
+          candidate.tabIndex = selected ? 0 : -1;
+          const panel = document.getElementById(candidate.getAttribute('aria-controls'));
+          panel.hidden = !selected;
+        });
+        if (moveFocus) tab.focus();
+      };
+
+      tabs.forEach((tab, index) => {
+        tab.addEventListener('click', () => selectTab(tab, false));
+        tab.addEventListener('keydown', (event) => {
+          let nextIndex = null;
+          if (event.key === 'ArrowRight' || event.key === 'ArrowDown') nextIndex = (index + 1) % tabs.length;
+          if (event.key === 'ArrowLeft' || event.key === 'ArrowUp') nextIndex = (index - 1 + tabs.length) % tabs.length;
+          if (event.key === 'Home') nextIndex = 0;
+          if (event.key === 'End') nextIndex = tabs.length - 1;
+          if (nextIndex === null) return;
+          event.preventDefault();
+          selectTab(tabs[nextIndex]);
+        });
+      });
+    })();
+  </script>
+</body>
+</html>
